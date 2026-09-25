@@ -3,6 +3,9 @@ import { apiFetch, ApiError } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { type BookingResponseDTO } from "@/lib/definitions";
 import { CancelBookingAction } from "@/components/CancelBookingAction";
+import { CheckInQr } from "@/components/CheckInQr";
+import { RescheduleBookingAction } from "@/components/RescheduleBookingAction";
+import { CourtReviewAction } from "@/components/CourtReviewAction";
 
 const CANCELLABLE_STATUSES = new Set(["PENDIENTE", "CONFIRMADA"]);
 
@@ -18,7 +21,7 @@ function formatDateBlock(dateString: string) {
     const monthName = formatterMonth.format(date).toUpperCase().replace('.', '');
     
     return { dayName, dayNumber: d.toString(), monthName };
-  } catch (e) {
+  } catch {
     return { dayName: "DAY", dayNumber: "00", monthName: "MON" };
   }
 }
@@ -54,6 +57,16 @@ export default async function ReservasPage() {
       err instanceof ApiError
         ? err.message
         : "No se pudieron cargar tus reservas.";
+  }
+
+  const checkInCodes = new Map<number, string>();
+  if (!error) {
+    await Promise.all(bookings.filter((booking) => booking.status === "CONFIRMADA").map(async (booking) => {
+      try {
+        const response = await apiFetch<{ code: string }>(`/api/bookings/${booking.id}/check-in-code`, { token: session!.token });
+        checkInCodes.set(booking.id, response.code);
+      } catch { /* El QR es opcional; una falla no oculta la reserva. */ }
+    }));
   }
 
   return (
@@ -109,8 +122,6 @@ export default async function ReservasPage() {
       <ul className="flex flex-col gap-4">
         {bookings.map((booking) => {
           const dateBlock = formatDateBlock(booking.bookingDate);
-          const isPending = booking.status === "PENDIENTE";
-          
           return (
             <li
               key={booking.id}
@@ -155,6 +166,15 @@ export default async function ReservasPage() {
                     isRecurrent={booking.isRecurrent || false} 
                   />
                 )}
+                {booking.status === "PENDIENTE" && (
+                  <div className="flex flex-col items-end gap-1">
+                    {booking.paymentDeadline && <p className="text-[10px] font-semibold text-amber-600">Paga antes de las {booking.paymentDeadline.slice(11, 16)}</p>}
+                    <Link href="/pagos" className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">Pagar ahora</Link>
+                  </div>
+                )}
+                {booking.status === "CONFIRMADA" && <RescheduleBookingAction bookingId={booking.id} date={booking.bookingDate} startTime={booking.startTime} endTime={booking.endTime} />}
+                {booking.status === "COMPLETADA" && <CourtReviewAction courtId={booking.courtId} courtName={booking.courtName} />}
+                {booking.status === "CONFIRMADA" && <CheckInQr bookingId={booking.id} code={checkInCodes.get(booking.id)} />}
               </div>
             </li>
           );

@@ -105,3 +105,23 @@ export async function cancelBooking(formData: FormData) {
 
   revalidatePath("/reservas");
 }
+
+export async function rescheduleBooking(
+  _prevState: BookingFormState,
+  formData: FormData
+): Promise<BookingFormState> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  const bookingId = Number(formData.get("bookingId"));
+  const bookingDate = String(formData.get("bookingDate") ?? "");
+  const startTime = String(formData.get("startTime") ?? "");
+  const endTime = String(formData.get("endTime") ?? "");
+  if (!bookingId || !bookingDate || !startTime || !endTime) return { error: "Completa la nueva fecha y horario." };
+  try {
+    await apiFetch(`/api/bookings/${bookingId}/reschedule`, { method: "PUT", token: session.token, body: { bookingDate, startTime, endTime } });
+  } catch (error) {
+    return { error: error instanceof ApiError ? error.message : "No se pudo reprogramar la reserva." };
+  }
+  revalidatePath("/reservas");
+  return { success: "Reserva reprogramada correctamente." };
+}
