@@ -10,6 +10,13 @@ import type {
   ProfileFormState,
 } from "@/lib/definitions";
 
+async function requireCourtManager() {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (!["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"].includes(session.role)) redirect("/explorar");
+  return session;
+}
+
 async function requireAdmin() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -21,7 +28,7 @@ export async function saveCourt(
   _prevState: ProfileFormState,
   formData: FormData
 ): Promise<ProfileFormState> {
-  const session = await requireAdmin();
+  const session = await requireCourtManager();
 
   const id = formData.get("id") ? Number(formData.get("id")) : null;
   const body = {
@@ -30,6 +37,7 @@ export async function saveCourt(
     capacity: Number(formData.get("capacity")),
     basePricePerHour: Number(formData.get("basePricePerHour")),
     description: String(formData.get("description") ?? "").trim() || undefined,
+    venueId: formData.get("venueId") ? Number(formData.get("venueId")) : undefined,
   };
 
   try {
@@ -56,7 +64,7 @@ export async function saveCourt(
 }
 
 export async function toggleCourtActive(formData: FormData) {
-  const session = await requireAdmin();
+  const session = await requireCourtManager();
   const id = Number(formData.get("id"));
   const active = formData.get("active") === "true";
   if (!id) return;

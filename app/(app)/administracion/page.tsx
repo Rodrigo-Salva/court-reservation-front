@@ -7,57 +7,81 @@ import type {
   BookingResponseDTO,
   CourtResponseDTO,
   PackageResponseDTO,
+  PageResponse,
   UserResponseDTO,
+  VenueResponseDTO,
 } from "@/lib/definitions";
 
-export default async function AdministracionPage() {
+type Params = { tab?: string; uq?: string; ustatus?: string; upage?: string };
+
+const USERS_PAGE_SIZE = 10;
+
+export default async function AdministracionPage({ searchParams }: { searchParams: Promise<Params> }) {
   const session = await getSession();
-  if (session?.role !== "ADMIN") {
+  if (!session || !["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"].includes(session.role)) {
     redirect("/explorar");
   }
+  const params = await searchParams;
+  const token = session.token;
+
+  // Usuarios y paquetes son solo del ADMIN global; el admin de sede gestiona únicamente sus canchas.
+  const isAdmin = session.role === "ADMIN";
+  const canPickVenue = session.role !== "VENUE_ADMIN";
+
+  const usersQuery = new URLSearchParams({ size: String(USERS_PAGE_SIZE), page: String(Math.max(0, Number(params.upage) || 0)) });
+  if (params.uq?.trim()) usersQuery.set("q", params.uq.trim());
+  if (params.ustatus === "active") usersQuery.set("active", "true");
+  if (params.ustatus === "inactive") usersQuery.set("active", "false");
 
   let courts: CourtResponseDTO[] = [];
-  let packages: PackageResponseDTO[] = [];
-  let users: UserResponseDTO[] = [];
   let bookings: BookingResponseDTO[] = [];
+  let venues: VenueResponseDTO[] = [];
+  let packages: PackageResponseDTO[] = [];
+  let usersPage: PageResponse<UserResponseDTO> | null = null;
+  let activeUsers: number | null = null;
   let error: string | null = null;
 
   try {
-    [courts, packages, users, bookings] = await Promise.all([
-      apiFetch<CourtResponseDTO[]>("/api/courts/all", { token: session.token }),
-      apiFetch<PackageResponseDTO[]>("/api/packages/all", { token: session.token }),
-      apiFetch<UserResponseDTO[]>("/api/users/all", { token: session.token }),
-      apiFetch<BookingResponseDTO[]>("/api/bookings", { token: session.token }),
+    const [courtsResult, bookingsResult, venuesResult, packagesResult, usersResult, activeResult] = await Promise.all([
+      apiFetch<CourtResponseDTO[]>("/api/courts/all", { token }),
+      apiFetch<BookingResponseDTO[]>("/api/bookings", { token }),
+      canPickVenue ? apiFetch<VenueResponseDTO[]>("/api/venues/all", { token }) : Promise.resolve([] as VenueResponseDTO[]),
+      isAdmin ? apiFetch<PackageResponseDTO[]>("/api/packages/all", { token }) : Promise.resolve([] as PackageResponseDTO[]),
+      isAdmin ? apiFetch<PageResponse<UserResponseDTO>>(`/api/users/page?${usersQuery}`, { token }) : Promise.resolve(null),
+      isAdmin ? apiFetch<PageResponse<UserResponseDTO>>("/api/users/page?active=true&size=1", { token }) : Promise.resolve(null),
     ]);
+    courts = courtsResult;
+    bookings = bookingsResult;
+    venues = venuesResult;
+    packages = packagesResult;
+    usersPage = usersResult;
+    activeUsers = activeResult ? activeResult.totalElements : null;
   } catch (err) {
-    error =
-      err instanceof ApiError ? err.message : "No se pudo cargar la administración.";
+    error = err instanceof ApiError ? err.message : "No se pudo cargar la administración.";
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-foreground">
-          Administración
-        </h1>
+        <h1 className="font-display text-2xl font-bold text-foreground">Administración</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Vista general del negocio, canchas, usuarios y paquetes.
+          {isAdmin ? "Vista general del negocio, canchas, usuarios y paquetes." : "Vista general y canchas de tu sede."}
         </p>
       </div>
 
-      {error && (
-        <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
       {!error && (
         <AdminDashboard
+          isAdmin={isAdmin}
+          initialTab={params.tab}
           currentUserId={session.userId}
           courts={courts}
+          venues={venues}
           packages={packages}
-          users={users}
-          stats={computeAdminStats({ bookings, courts, users })}
+          usersPage={usersPage}
+          userFilters={{ q: params.uq ?? "", status: params.ustatus ?? "" }}
+          stats={computeAdminStats({ bookings, courts, activeUsers })}
         />
       )}
     </div>

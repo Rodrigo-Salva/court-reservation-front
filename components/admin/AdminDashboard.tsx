@@ -9,40 +9,52 @@ import type {
   BookingResponseDTO,
   CourtResponseDTO,
   PackageResponseDTO,
+  PageResponse,
   UserResponseDTO,
+  VenueResponseDTO,
 } from "@/lib/definitions";
 import type { DayOccupancy } from "@/lib/adminStats";
 
-const TABS = ["Resumen", "Canchas", "Usuarios", "Paquetes"] as const;
-type Tab = (typeof TABS)[number];
+const ALL_TABS = ["Resumen", "Canchas", "Usuarios", "Paquetes"] as const;
+const STAFF_TABS = ["Resumen", "Canchas"] as const;
+type Tab = (typeof ALL_TABS)[number];
 
 export function AdminDashboard({
+  isAdmin,
+  initialTab,
   currentUserId,
   courts,
+  venues,
   packages,
-  users,
+  usersPage,
+  userFilters,
   stats,
 }: {
+  isAdmin: boolean;
+  initialTab?: string;
   currentUserId: number;
   courts: CourtResponseDTO[];
+  venues: VenueResponseDTO[];
   packages: PackageResponseDTO[];
-  users: UserResponseDTO[];
+  usersPage: PageResponse<UserResponseDTO> | null;
+  userFilters: { q: string; status: string };
   stats: {
     occupancyToday: number;
     revenueThisMonth: number;
     todayBookingsCount: number;
     todayPending: number;
-    activeUsers: number;
+    activeUsers: number | null;
     last7Days: DayOccupancy[];
     recentActivity: BookingResponseDTO[];
   };
 }) {
-  const [tab, setTab] = useState<Tab>("Resumen");
+  const tabs: readonly Tab[] = isAdmin ? ALL_TABS : STAFF_TABS;
+  const [tab, setTab] = useState<Tab>(tabs.find((t) => t === initialTab) ?? "Resumen");
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-6 border-b border-border">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             type="button"
@@ -59,11 +71,11 @@ export function AdminDashboard({
       </div>
 
       {tab === "Resumen" && <SummaryTab {...stats} />}
-      {tab === "Canchas" && <CourtManager courts={courts} />}
-      {tab === "Usuarios" && (
-        <UserManager users={users} currentUserId={currentUserId} />
+      {tab === "Canchas" && <CourtManager courts={courts} venues={venues} />}
+      {isAdmin && tab === "Usuarios" && usersPage && (
+        <UserManager usersPage={usersPage} currentUserId={currentUserId} filters={userFilters} />
       )}
-      {tab === "Paquetes" && <PackageManager packages={packages} />}
+      {isAdmin && tab === "Paquetes" && <PackageManager packages={packages} />}
     </div>
   );
 }

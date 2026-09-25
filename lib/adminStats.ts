@@ -1,5 +1,5 @@
 import "server-only";
-import type { BookingResponseDTO, CourtResponseDTO, UserResponseDTO } from "@/lib/definitions";
+import type { BookingResponseDTO, CourtResponseDTO } from "@/lib/definitions";
 
 // Debe coincidir con app.business-rules.booking.operation-{start,end}-time
 // en application.yml del backend (06:00 a 23:00 = 17 horas).
@@ -25,11 +25,11 @@ export type DayOccupancy = {
 export function computeAdminStats({
   bookings,
   courts,
-  users,
+  activeUsers,
 }: {
   bookings: BookingResponseDTO[];
   courts: CourtResponseDTO[];
-  users: UserResponseDTO[];
+  activeUsers: number | null;
 }) {
   const today = toISODate(new Date());
   const activeCourtCount = courts.filter((c) => c.active).length || 1;
@@ -51,8 +51,6 @@ export function computeAdminStats({
   const revenueThisMonth = chargeable
     .filter((b) => b.bookingDate.startsWith(currentMonth))
     .reduce((sum, b) => sum + b.totalPrice, 0);
-
-  const activeUsers = users.filter((u) => u.active).length;
 
   // Ocupacion por dia: los ultimos 7 dias, terminando hoy.
   const DAY_LABELS = ["D", "L", "M", "X", "J", "V", "S"];

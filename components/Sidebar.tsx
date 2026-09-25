@@ -5,22 +5,42 @@ import {
   Search, 
   Calendar, 
   Package, 
+  CreditCard,
   Clock, 
   User, 
   Settings, 
+  BarChart3,
+  ScanLine,
+  Ban,
+  Building2,
+  UsersRound,
+  Brackets,
   Trophy,
-  Zap
+  Zap,
+  ReceiptText,
+  Star
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
-const NAV_LINKS = [
-  { href: "/explorar", label: "Explorar", icon: Search, adminOnly: false },
-  { href: "/reservas", label: "Reservas", icon: Calendar, adminOnly: false },
-  { href: "/paquetes", label: "Paquetes", icon: Package, adminOnly: false },
-  { href: "/espera", label: "Espera", icon: Clock, adminOnly: false },
-  { href: "/perfil", label: "Perfil", icon: User, adminOnly: false },
-  { href: "/administracion", label: "Administración", icon: Settings, adminOnly: true },
-] as const;
+const NAV_LINKS: { href: string; label: string; icon: LucideIcon; roles?: string[] }[] = [
+  { href: "/explorar", label: "Explorar", icon: Search },
+  { href: "/reservas", label: "Reservas", icon: Calendar },
+  { href: "/paquetes", label: "Paquetes", icon: Package },
+  { href: "/pagos", label: "Pagos", icon: CreditCard },
+  { href: "/espera", label: "Espera", icon: Clock },
+  { href: "/comunidad", label: "Comunidad", icon: Trophy },
+  { href: "/equipos", label: "Equipos", icon: UsersRound },
+  { href: "/perfil", label: "Perfil", icon: User },
+  { href: "/administracion", label: "Administración", icon: Settings, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
+  { href: "/recepcion", label: "Recepción", icon: ScanLine, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN", "RECEPTIONIST"] },
+  { href: "/bloqueos", label: "Bloqueos", icon: Ban, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
+  { href: "/transacciones", label: "Transacciones", icon: ReceiptText, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
+  { href: "/resenas", label: "Reseñas", icon: Star, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
+  { href: "/sedes", label: "Sedes", icon: Building2, roles: ["ADMIN", "SUPER_ADMIN"] },
+  { href: "/torneos", label: "Torneos", icon: Brackets, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
+  { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
+];
 
 export function Sidebar({
   name,
@@ -32,7 +52,7 @@ export function Sidebar({
   role: string;
 }) {
   const pathname = usePathname();
-  const links = NAV_LINKS.filter((link) => !link.adminOnly || role === "ADMIN");
+  const links = NAV_LINKS.filter((link) => !link.roles || link.roles.includes(role));
 
   return (
     <aside className="flex flex-col w-[260px] border-r border-border bg-card h-screen shrink-0 sticky top-0">

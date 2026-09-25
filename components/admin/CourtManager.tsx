@@ -3,10 +3,10 @@
 import { useActionState, useEffect, useState } from "react";
 import { Pencil, Plus, X, Settings2 } from "lucide-react";
 import { saveCourt, toggleCourtActive } from "@/app/actions/admin";
-import { SPORT_TYPES, type CourtResponseDTO } from "@/lib/definitions";
+import { SPORT_TYPES, type CourtResponseDTO, type VenueResponseDTO } from "@/lib/definitions";
 import { sportLabel } from "@/lib/sport";
 
-export function CourtManager({ courts }: { courts: CourtResponseDTO[] }) {
+export function CourtManager({ courts, venues }: { courts: CourtResponseDTO[]; venues: VenueResponseDTO[] }) {
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
 
   return (
@@ -25,7 +25,7 @@ export function CourtManager({ courts }: { courts: CourtResponseDTO[] }) {
 
       {editingId === "new" && (
         <div className="px-5 pb-5">
-          <CourtForm onDone={() => setEditingId(null)} />
+          <CourtForm venues={venues} onDone={() => setEditingId(null)} />
         </div>
       )}
 
@@ -33,6 +33,7 @@ export function CourtManager({ courts }: { courts: CourtResponseDTO[] }) {
         <thead>
           <tr className="border-y border-border text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             <th className="px-5 py-3">Nombre</th>
+            <th className="px-5 py-3">Sede</th>
             <th className="px-5 py-3">Tipo</th>
             <th className="px-5 py-3">Precio</th>
             <th className="px-5 py-3">Estado</th>
@@ -43,13 +44,14 @@ export function CourtManager({ courts }: { courts: CourtResponseDTO[] }) {
           {courts.map((court) =>
             editingId === court.id ? (
               <tr key={court.id}>
-                <td colSpan={5} className="px-5 py-4">
-                  <CourtForm court={court} onDone={() => setEditingId(null)} />
+                <td colSpan={6} className="px-5 py-4">
+                  <CourtForm court={court} venues={venues} onDone={() => setEditingId(null)} />
                 </td>
               </tr>
             ) : (
               <tr key={court.id} className="hover:bg-secondary/40">
                 <td className="px-5 py-3 font-medium text-foreground">{court.name}</td>
+                <td className="px-5 py-3 text-muted-foreground">{court.venueName ?? "Sin sede"}</td>
                 <td className="px-5 py-3 text-muted-foreground">
                   {sportLabel(court.sportType)}
                 </td>
@@ -101,9 +103,11 @@ export function CourtManager({ courts }: { courts: CourtResponseDTO[] }) {
 
 function CourtForm({
   court,
+  venues,
   onDone,
 }: {
   court?: CourtResponseDTO;
+  venues: VenueResponseDTO[];
   onDone: () => void;
 }) {
   const [state, formAction, pending] = useActionState(saveCourt, undefined);
@@ -144,6 +148,22 @@ function CourtForm({
             ))}
           </select>
         </div>
+        {venues.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-foreground">Sede</label>
+            <select
+              name="venueId"
+              required
+              defaultValue={court?.venueId ?? ""}
+              className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+            >
+              <option value="" disabled>Selecciona una sede</option>
+              {venues.filter((v) => v.active || v.id === court?.venueId).map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <Field
           label="Capacidad"
           name="capacity"

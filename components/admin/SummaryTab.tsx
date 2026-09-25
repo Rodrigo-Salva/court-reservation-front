@@ -15,7 +15,7 @@ export function SummaryTab({
   revenueThisMonth: number;
   todayBookingsCount: number;
   todayPending: number;
-  activeUsers: number;
+  activeUsers: number | null;
   last7Days: DayOccupancy[];
   recentActivity: BookingResponseDTO[];
 }) {
@@ -43,7 +43,7 @@ export function SummaryTab({
         <StatCard
           icon={<Users size={20} />}
           label="Usuarios activos"
-          value={String(activeUsers)}
+          value={activeUsers === null ? "—" : String(activeUsers)}
         />
       </div>
 
