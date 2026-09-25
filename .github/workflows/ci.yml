@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, tipos y build
+    runs-on: ubuntu-latest
+    env:
+      # Valores ficticios solo para compilar; los reales se definen en el entorno de despliegue.
+      API_URL: http://localhost:8080
+      SESSION_SECRET: ci-only-session-secret-that-is-long-enough-1234567890
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
