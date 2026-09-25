@@ -6,9 +6,10 @@ import {
   SPORT_TYPES,
   type CourtAvailabilityResponseDTO,
   type CourtResponseDTO,
+  type CourtReviewResponseDTO,
 } from "@/lib/definitions";
 import { sportLabel, SPORT_COLORS } from "@/lib/sport";
-import { Zap, MapPin, ChevronRight } from "lucide-react";
+import { Zap, MapPin, ChevronRight, Star } from "lucide-react";
 
 const DEFAULT_MAX_PRICE = 200;
 
@@ -60,6 +61,7 @@ export default async function ExplorarPage({
 
   // Horarios reales disponibles por cancha para la fecha elegida.
   const availabilityByCourtId = new Map<number, number>();
+  const reviewsByCourtId = new Map<number, CourtReviewResponseDTO[]>();
   if (!error) {
     await Promise.all(
       courts.map(async (court) => {
@@ -74,6 +76,14 @@ export default async function ExplorarPage({
           );
         } catch {
           availabilityByCourtId.set(court.id, 0);
+        }
+        try {
+          const reviews = await apiFetch<CourtReviewResponseDTO[]>(
+            `/api/court-reviews/court/${court.id}`
+          );
+          reviewsByCourtId.set(court.id, reviews);
+        } catch {
+          reviewsByCourtId.set(court.id, []);
         }
       })
     );
@@ -184,6 +194,10 @@ export default async function ExplorarPage({
             const courtColor =
               SPORT_COLORS[court.sportType.toLowerCase()] || "bg-[#22c55e]";
             const slotCount = availabilityByCourtId.get(court.id) ?? 0;
+            const reviews = reviewsByCourtId.get(court.id) ?? [];
+            const averageRating = reviews.length
+              ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length
+              : null;
 
             return (
               <article
@@ -213,6 +227,10 @@ export default async function ExplorarPage({
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <MapPin size={12} />
                         Hasta {court.capacity} personas
+                      </p>
+                      <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Star size={12} className="fill-amber-400 text-amber-400" />
+                        {averageRating ? `${averageRating.toFixed(1)} (${reviews.length})` : "Sin reseñas aún"}
                       </p>
                     </div>
                     <div className="text-right">
