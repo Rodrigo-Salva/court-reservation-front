@@ -63,7 +63,9 @@ export async function apiFetch<T>(
       data ?? {
         status: response.status,
         error: response.statusText,
-        message: "No se pudo conectar con el servidor. Intenta de nuevo.",
+        message: [401, 403].includes(response.status)
+          ? "Tu sesión ya no es válida. Cierra sesión e inicia sesión de nuevo."
+          : "No se pudo conectar con el servidor. Intenta de nuevo.",
       }
     );
   }

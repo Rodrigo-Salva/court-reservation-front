@@ -68,6 +68,20 @@ export type CourtResponseDTO = {
   basePricePerHour: number;
   active: boolean;
   description?: string;
+  venueId?: number | null;
+  venueName?: string | null;
+};
+
+export type CourtReviewResponseDTO = {
+  id: number;
+  courtId: number;
+  courtName?: string;
+  venueName?: string | null;
+  hidden?: boolean;
+  userName: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
 };
 
 export type BookingResponseDTO = {
@@ -83,6 +97,134 @@ export type BookingResponseDTO = {
   totalPrice: number;
   isRecurrent: boolean;
   usesPackage: boolean;
+  paymentDeadline?: string | null;
+};
+
+export type OperationalReportResponseDTO = {
+  startDate: string;
+  endDate: string;
+  totalBookings: number;
+  completedBookings: number;
+  cancelledBookings: number;
+  noShows: number;
+  revenue: number;
+  cancellationRate: number;
+  peakHours: { hour: string; bookings: number }[];
+  scope: string;
+  daily: { date: string; bookings: number; revenue: number }[];
+  byCourt: { courtId: number; courtName: string; sportType: string; venueName: string | null; bookings: number; revenue: number }[];
+  bySport: { sportType: string; bookings: number; revenue: number }[];
+};
+
+export type PageResponse<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+export type PaymentPageResponse = PageResponse<PaymentResponseDTO> & { approvedTotal: number; refundedTotal: number };
+
+export type PaymentResponseDTO = {
+  id: number;
+  bookingId: number;
+  courtName: string;
+  amount: number;
+  method: "TARJETA" | "YAPE_PLIN" | "EFECTIVO";
+  status: "APROBADO" | "RECHAZADO" | "REEMBOLSADO";
+  operationCode: string;
+  rejectionReason?: string;
+  paidAt?: string;
+  refundedAt?: string;
+  userName?: string;
+  createdAt?: string;
+};
+
+export type UserNotificationResponseDTO = {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+};
+
+export type CourtBlockResponseDTO = {
+  id: number;
+  courtId: number;
+  blockDate: string;
+  startTime: string;
+  endTime: string;
+  type: "MANTENIMIENTO" | "FERIADO" | "EVENTO";
+  reason: string;
+  active: boolean;
+};
+
+export type VenueResponseDTO = { id: number; name: string; address: string; phone?: string; active: boolean };
+export type TeamResponseDTO = { id: number; name: string; description?: string; ownerId: number; ownerName: string; memberCount: number };
+export type TeamMemberDTO = { userId: number; name: string; role: "OWNER" | "MEMBER" };
+export type TeamInvitationDTO = {
+  id: number;
+  teamId: number;
+  teamName: string;
+  invitedName: string;
+  invitedEmail: string;
+  invitedByName: string;
+  status: "PENDIENTE" | "ACEPTADA" | "RECHAZADA" | "CANCELADA";
+  createdAt: string;
+};
+
+export type OpenMatchResponseDTO = {
+  id: number;
+  bookingId: number;
+  courtId: number;
+  courtName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  creatorName: string;
+  maxPlayers: number;
+  confirmedPlayers: number;
+  note?: string;
+  status: "ABIERTO" | "COMPLETO" | "CERRADO";
+};
+
+export type OpenMatchJoinRequestDTO = {
+  id: number;
+  userId: number;
+  name: string;
+  status: "PENDIENTE" | "ACEPTADA" | "RECHAZADA";
+};
+
+export type TournamentMatchDTO = {
+  id: number;
+  playerOneId: number;
+  playerOne: string;
+  playerTwoId: number;
+  playerTwo: string;
+  scoreOne: number | null;
+  scoreTwo: number | null;
+  completed: boolean;
+};
+
+export type TournamentRankingDTO = {
+  userId: number;
+  name: string;
+  points: number;
+  wins: number;
+  losses: number;
+};
+
+export type TournamentDTO = {
+  id: number;
+  name: string;
+  sportType: SportType;
+  startDate: string;
+  maxParticipants: number;
+  status: "INSCRIPCION" | "EN_CURSO" | "FINALIZADO";
+  venueId?: number | null;
+  venueName?: string | null;
 };
 
 export type TimeSlotDTO = {

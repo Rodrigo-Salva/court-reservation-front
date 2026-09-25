@@ -41,8 +41,8 @@
   --color-success: var(--success);
   --color-danger: var(--danger);
   --color-info: var(--info);
-  --font-sans: var(--font-dm-sans);
-  --font-display: var(--font-outfit);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-display: "Trebuchet MS", Arial, Helvetica, sans-serif;
 }
 
 body {

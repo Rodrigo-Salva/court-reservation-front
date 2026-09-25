@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { apiFetch, ApiError } from "@/lib/api";
-import { createSession, deleteSession } from "@/lib/session";
+import { createSession, deleteSession, getSession } from "@/lib/session";
 import type {
   AuthResponseDTO,
   LoginFormState,
@@ -104,6 +104,15 @@ export async function register(
 }
 
 export async function logout() {
+  const session = await getSession();
+  if (session) {
+    try {
+      // Revoca el token en el backend; si falla igual se cierra la sesión local.
+      await apiFetch("/api/auth/logout", { method: "POST", token: session.token });
+    } catch {
+      /* Backend no disponible o token ya inválido. */
+    }
+  }
   await deleteSession();
   redirect("/login");
 }

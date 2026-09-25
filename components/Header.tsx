@@ -1,6 +1,7 @@
 "use client";
 
 import { Moon, Bell } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export function Header({ name }: { name: string }) {
@@ -13,6 +14,8 @@ export function Header({ name }: { name: string }) {
   else if (pathname.startsWith("/espera")) title = "Lista de espera";
   else if (pathname.startsWith("/perfil")) title = "Mi Perfil";
   else if (pathname.startsWith("/administracion")) title = "Administración";
+  else if (pathname.startsWith("/pagos")) title = "Pagos";
+  else if (pathname.startsWith("/notificaciones")) title = "Notificaciones";
 
   return (
     <header className="flex h-16 items-center justify-between px-8 border-b border-border bg-background shrink-0">
@@ -24,9 +27,9 @@ export function Header({ name }: { name: string }) {
         <button className="hover:text-foreground transition-colors">
           <Moon size={20} />
         </button>
-        <button className="hover:text-foreground transition-colors">
+        <Link href="/notificaciones" className="hover:text-foreground transition-colors" aria-label="Ver notificaciones">
           <Bell size={20} />
-        </button>
+        </Link>
         <div className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center font-bold text-xs ml-2">
           {name.substring(0, 2).toUpperCase()}
         </div>
