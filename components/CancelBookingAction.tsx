@@ -1,101 +1,78 @@
 "use client";
 
-import { useState } from "react";
-import { X, Percent } from "lucide-react";
+import { useActionState, useState } from "react";
 import { cancelBooking } from "@/app/actions/bookings";
+import { Modal, SubmitButton, TextareaField } from "@/components/forms";
+import { Notice, secondaryButton } from "@/components/ui";
+import { cancellationPolicy, hoursUntil } from "@/lib/cancellation";
+import { money } from "@/lib/format";
 
 type CancelBookingActionProps = {
   bookingId: number;
   totalPrice: number;
   isRecurrent: boolean;
+  bookingDate: string;
+  startTime: string;
+  unpaid: boolean;
+  isVip: boolean;
 };
 
-export function CancelBookingAction({ bookingId, totalPrice, isRecurrent }: CancelBookingActionProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function CancelBookingAction({ bookingId, totalPrice, isRecurrent, bookingDate, startTime, unpaid, isVip }: CancelBookingActionProps) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction] = useActionState(cancelBooking, undefined);
+  const [hours, setHours] = useState(0);
 
-  // Simplified penalty logic for the UI (50% as in screenshot)
-  const penalty = totalPrice * 0.5;
-  const refund = totalPrice - penalty;
+  const policy = cancellationPolicy({ hoursInAdvance: hours, isVip, unpaid });
+  const penalty = unpaid ? 0 : (totalPrice * policy.percent) / 100;
+  const done = Boolean(state?.success);
+
+  const openDialog = () => {
+    setHours(hoursUntil(`${bookingDate}T${startTime}`, Date.now()));
+    setOpen(true);
+  };
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="rounded-lg border border-border bg-card px-4 py-1.5 text-xs font-bold text-foreground transition-colors hover:bg-secondary"
-      >
-        Cancelar
-      </button>
+      <button type="button" onClick={openDialog} className={`${secondaryButton} px-4 py-1.5 text-xs`}>Cancelar</button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="relative w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
-            <button
-              onClick={() => setIsOpen(false)}
-              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
-            >
-              <X size={20} />
-            </button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Cancelar reserva" description={hours > 0 ? `Faltan ${hours} h para tu reserva.` : "Tu reserva empieza en menos de una hora."}>
+        {done ? (
+          <div className="flex flex-col gap-4">
+            <Notice tone="success">{state?.success}</Notice>
+            <button type="button" onClick={() => setOpen(false)} className={secondaryButton}>Cerrar</button>
+          </div>
+        ) : (
+          <form action={formAction} className="flex flex-col gap-4">
+            <input type="hidden" name="bookingId" value={bookingId} />
 
-            <div className="mb-4 flex w-fit items-center justify-center rounded-full bg-[#fef3c7] p-3 text-[#d97706] mx-auto">
-              <Percent size={24} strokeWidth={3} />
-            </div>
+            <Notice tone={policy.percent === 0 ? "success" : "warning"}>{policy.reason}</Notice>
 
-            <h2 className="text-xl font-bold text-foreground text-left">Cancelar reserva</h2>
-            <p className="mt-2 text-sm text-muted-foreground text-left">
-              Faltan 10 horas para tu reserva. Se aplicará la política de cancelación vigente.
-            </p>
+            {!unpaid && (
+              <dl className="flex flex-col gap-2 rounded-2xl bg-secondary/60 p-4 text-sm">
+                <div className="flex justify-between"><dt>Total pagado</dt><dd className="font-bold">{money(totalPrice)}</dd></div>
+                <div className="flex justify-between"><dt>Penalización ({policy.percent}%)</dt><dd className="font-bold text-destructive">− {money(penalty)}</dd></div>
+                <div className="flex justify-between border-t border-border pt-2"><dt>Reembolso estimado</dt><dd className="font-bold">{money(totalPrice - penalty)}</dd></div>
+              </dl>
+            )}
 
-            <div className="mt-6 flex flex-col gap-3 rounded-xl bg-secondary/50 p-4">
-              <div className="flex justify-between text-sm">
-                <span className="font-medium text-foreground">Total pagado</span>
-                <span className="font-bold text-foreground">S/ {totalPrice.toFixed(2)}</span>
-              </div>
-              <div className="h-px w-full bg-border"></div>
-              <div className="flex justify-between text-sm">
-                <span className="font-medium text-foreground">Penalización (50%)</span>
-                <span className="font-bold text-[#ef4444]">- S/ {penalty.toFixed(2)}</span>
-              </div>
-              <div className="h-px w-full bg-border"></div>
-              <div className="flex justify-between text-sm">
-                <span className="font-medium text-foreground">Reembolso</span>
-                <span className="font-bold text-foreground">S/ {refund.toFixed(2)}</span>
-              </div>
-            </div>
+            <TextareaField id={`reason-${bookingId}`} name="reason" label="Motivo" optional rows={2} maxLength={200} placeholder="Cuéntanos por qué cancelas" />
 
             {isRecurrent && (
-              <label className="mt-6 flex items-center gap-2 text-sm text-foreground cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  name="cancelRecurrent"
-                  className="w-4 h-4 rounded border-[#22c55e] text-[#22c55e] focus:ring-[#22c55e] accent-[#22c55e]" 
-                />
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                <input type="checkbox" name="cancelAllRecurrent" className="size-4 accent-primary" />
                 Cancelar toda la serie recurrente
               </label>
             )}
 
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="flex-1 rounded-lg border border-border bg-card py-2.5 text-sm font-bold text-foreground hover:bg-secondary transition-colors"
-              >
-                Conservar reserva
-              </button>
-              
-              <form action={cancelBooking} className="flex-1">
-                <input type="hidden" name="bookingId" value={bookingId} />
-                <button
-                  type="submit"
-                  className="w-full rounded-lg bg-[#ef4444] py-2.5 text-sm font-bold text-white hover:bg-[#ef4444]/90 transition-colors"
-                >
-                  Confirmar cancelación
-                </button>
-              </form>
+            {state?.error && <Notice tone="error">{state.error}</Notice>}
+
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setOpen(false)} className={`${secondaryButton} flex-1`}>Conservar reserva</button>
+              <SubmitButton variant="danger" pendingText="Cancelando…" className="flex-1">Confirmar cancelación</SubmitButton>
             </div>
-          </div>
-        </div>
-      )}
+          </form>
+        )}
+      </Modal>
     </>
   );
 }

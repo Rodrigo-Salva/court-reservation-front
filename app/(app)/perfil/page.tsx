@@ -1,12 +1,19 @@
-import { Trophy, Calendar, Percent } from "lucide-react";
+import { CalendarClock, Percent, Trophy } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { ProfileForm } from "@/components/ProfileForm";
+import { Avatar, Notice, PageHeader, StatCard, StatusPill, cardClass } from "@/components/ui";
+import { shortDate } from "@/lib/format";
 import { MEMBERSHIP_TYPES, type UserResponseDTO } from "@/lib/definitions";
 
-const membershipLabel = (value: string) =>
-  MEMBERSHIP_TYPES.find((membership) => membership.value === value)?.label ??
-  value;
+const membershipLabel = (value: string) => MEMBERSHIP_TYPES.find((membership) => membership.value === value)?.label ?? value;
+const ROLE_LABEL: Record<string, string> = {
+  USER: "Jugador",
+  RECEPTIONIST: "Recepción",
+  VENUE_ADMIN: "Admin de sede",
+  ADMIN: "Administrador",
+  SUPER_ADMIN: "Super administrador",
+};
 
 export default async function PerfilPage() {
   const session = await getSession();
@@ -14,76 +21,42 @@ export default async function PerfilPage() {
   let user: UserResponseDTO | null = null;
   let error: string | null = null;
   try {
-    user = await apiFetch<UserResponseDTO>(`/api/users/${session!.userId}`, {
-      token: session!.token,
-    });
+    user = await apiFetch<UserResponseDTO>(`/api/users/${session!.userId}`, { token: session!.token });
   } catch (err) {
-    error =
-      err instanceof ApiError ? err.message : "No se pudo cargar tu perfil.";
+    error = err instanceof ApiError ? err.message : "No se pudo cargar tu perfil.";
   }
 
   if (error || !user) {
-    return (
-      <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-        {error}
-      </p>
-    );
+    return <Notice tone="error">{error ?? "No se pudo cargar tu perfil."}</Notice>;
   }
+
+  const isPlayer = session!.role === "USER";
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-foreground text-xl font-bold text-background">
+      <PageHeader eyebrow="Cuenta" title="Mi perfil" description="Tus datos personales y los beneficios de tu membresía." />
+
+      <section className={`${cardClass} flex flex-wrap items-center gap-5 p-6`}>
+        <span className="grid size-16 shrink-0 place-items-center rounded-full bg-primary/15 font-display text-xl font-bold text-emerald-800" aria-hidden>
           {user.name.substring(0, 2).toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="truncate font-display text-2xl font-bold">{user.name}</h2>
+            <StatusPill tone={isPlayer ? "info" : "warning"}>{ROLE_LABEL[session!.role] ?? session!.role}</StatusPill>
+          </div>
+          <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+          <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><Avatar name={user.name} />Miembro desde {shortDate(user.registrationDate)}{user.venueName ? ` · ${user.venueName}` : ""}</p>
         </div>
-        <div>
-          <h1 className="font-display text-2xl font-bold text-foreground">
-            {user.name}
-          </h1>
-          <p className="text-sm text-muted-foreground">{user.email}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Miembro desde {user.registrationDate.slice(0, 10)}
-          </p>
-        </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div className="rounded-full bg-[#fef3c7] p-2 text-[#ca8a04]">
-            <Trophy size={20} />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Membresía</p>
-            <p className="font-bold text-foreground">
-              {membershipLabel(user.membershipType)}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div className="rounded-full bg-[#dcfce7] p-2 text-[#166534]">
-            <Percent size={20} />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Descuento</p>
-            <p className="font-bold text-foreground">
-              {Math.round(user.membershipDiscount * 100)}%
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div className="rounded-full bg-[#dbeafe] p-2 text-[#1d4ed8]">
-            <Calendar size={20} />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Reserva con anticipación</p>
-            <p className="font-bold text-foreground">
-              hasta {user.maxDaysAdvance} días
-            </p>
-          </div>
-        </div>
-      </div>
+      {isPlayer && (
+        <section className="grid gap-4 sm:grid-cols-3" aria-label="Beneficios">
+          <StatCard icon={Trophy} tone="amber" label="Membresía" value={membershipLabel(user.membershipType)} />
+          <StatCard icon={Percent} tone="green" label="Descuento" value={`${Math.round(user.membershipDiscount * 100)}%`} hint="en cada reserva" />
+          <StatCard icon={CalendarClock} tone="blue" label="Anticipación" value={`${user.maxDaysAdvance} días`} hint="para reservar" />
+        </section>
+      )}
 
       <ProfileForm user={user} />
     </div>

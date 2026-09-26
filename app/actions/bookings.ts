@@ -82,28 +82,30 @@ export async function createBooking(
   redirect("/reservas");
 }
 
-export async function cancelBooking(formData: FormData) {
+export async function cancelBooking(
+  _prevState: BookingFormState,
+  formData: FormData
+): Promise<BookingFormState> {
   const session = await getSession();
   if (!session) {
     redirect("/login");
   }
 
   const bookingId = Number(formData.get("bookingId"));
-  const reason = String(formData.get("reason") ?? "");
-  if (!bookingId) return;
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!bookingId) return { error: "Reserva inválida." };
 
   try {
-    await apiFetch("/api/bookings/cancel", {
+    const result = await apiFetch<{ message?: string }>("/api/bookings/cancel", {
       method: "PUT",
       token: session.token,
-      body: { bookingId, reason: reason || undefined },
+      body: { bookingId, reason: reason || undefined, cancelAllRecurrent: formData.get("cancelAllRecurrent") === "on" },
     });
-  } catch {
-    // La UI vuelve a mostrar el estado real de la reserva al revalidar;
-    // si la cancelacion fallo (p.ej. reserva ya cancelada) simplemente no cambia nada.
+    revalidatePath("/reservas");
+    return { success: result?.message ?? "Reserva cancelada." };
+  } catch (err) {
+    return { error: err instanceof ApiError ? err.message : "No se pudo cancelar la reserva." };
   }
-
-  revalidatePath("/reservas");
 }
 
 export async function rescheduleBooking(

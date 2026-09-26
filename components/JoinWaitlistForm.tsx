@@ -1,103 +1,50 @@
 "use client";
 
+import { ConfirmButton } from "@/components/forms";
 import { useActionState } from "react";
+import { BellRing } from "lucide-react";
 import { joinWaitingList } from "@/app/actions/waitlist";
+import { Notice, cardClass, inputClass, primaryButton } from "@/components/ui";
 import type { CourtResponseDTO } from "@/lib/definitions";
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export function JoinWaitlistForm({ courts }: { courts: CourtResponseDTO[] }) {
-  const [state, formAction, pending] = useActionState(joinWaitingList, undefined);
+  const [state, formAction] = useActionState(joinWaitingList, undefined);
 
   return (
-    <form
-      action={formAction}
-      className="mt-4 flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
-    >
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="courtId" className="text-sm font-medium text-foreground">
-            Cancha
-          </label>
-          <select
-            id="courtId"
-            name="courtId"
-            required
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          >
-            {courts.map((court) => (
-              <option key={court.id} value={court.id}>
-                {court.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label htmlFor="desiredDate" className="text-sm font-medium text-foreground">
-            Fecha deseada
-          </label>
-          <input
-            id="desiredDate"
-            name="desiredDate"
-            type="date"
-            required
-            min={todayISO()}
-            defaultValue={todayISO()}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor="desiredStartTime"
-            className="text-sm font-medium text-foreground"
-          >
-            Hora de inicio
-          </label>
-          <input
-            id="desiredStartTime"
-            name="desiredStartTime"
-            type="time"
-            required
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label htmlFor="desiredEndTime" className="text-sm font-medium text-foreground">
-            Hora de fin
-          </label>
-          <input
-            id="desiredEndTime"
-            name="desiredEndTime"
-            type="time"
-            required
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          />
+    <form action={formAction} className={`${cardClass} flex flex-col gap-5 p-5 sm:p-6`}>
+      <div className="flex items-center gap-3">
+        <span className="grid size-10 place-items-center rounded-xl bg-primary/15 text-emerald-800"><BellRing size={19} /></span>
+        <div>
+          <h2 className="font-display text-lg font-bold">Unirme a una lista de espera</h2>
+          <p className="text-xs text-muted-foreground">Elige el horario que quieres; te avisamos si se libera.</p>
         </div>
       </div>
 
-      {state?.error && (
-        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
-      {state?.success && (
-        <p className="rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">
-          {state.success}
-        </p>
-      )}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-sm font-semibold sm:col-span-2 lg:col-span-1">Cancha
+          <select id="courtId" name="courtId" required className={`${inputClass} mt-1.5 font-normal`}>
+            {courts.map((court) => <option key={court.id} value={court.id}>{court.name}</option>)}
+          </select>
+        </label>
+        <label className="text-sm font-semibold">Fecha deseada
+          <input id="desiredDate" name="desiredDate" type="date" required min={todayISO()} defaultValue={todayISO()} className={`${inputClass} mt-1.5 font-normal`} />
+        </label>
+        <label className="text-sm font-semibold">Hora de inicio
+          <input id="desiredStartTime" name="desiredStartTime" type="time" required className={`${inputClass} mt-1.5 font-normal`} />
+        </label>
+        <label className="text-sm font-semibold">Hora de fin
+          <input id="desiredEndTime" name="desiredEndTime" type="time" required className={`${inputClass} mt-1.5 font-normal`} />
+        </label>
+      </div>
 
-      <button
-        type="submit"
-        disabled={pending || courts.length === 0}
-        className="w-fit rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {pending ? "Uniéndote..." : "Unirme a la lista de espera"}
-      </button>
+      {state?.error && <Notice tone="error">{state.error}</Notice>}
+      {state?.success && <Notice tone="success">{state.success}</Notice>}
+
+      <div>
+        <ConfirmButton message="Te añadiremos a la lista de espera y te avisaremos si se libera el horario." confirmLabel="Sí, unirme" pendingText="Uniéndote…" disabled={courts.length === 0} className={`${primaryButton} disabled:cursor-not-allowed disabled:opacity-60`}>Unirme a la lista de espera</ConfirmButton>
+      </div>
     </form>
   );
 }

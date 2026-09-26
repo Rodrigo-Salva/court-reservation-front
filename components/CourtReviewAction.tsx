@@ -1,9 +1,46 @@
 "use client";
+
 import { useActionState, useState } from "react";
-import { Star, X } from "lucide-react";
+import { Star } from "lucide-react";
 import { createCourtReview } from "@/app/actions/reviews";
+import { Modal, TextareaField, ConfirmButton } from "@/components/forms";
+import { Notice } from "@/components/ui";
+
+const RATING_LABEL = ["", "Mala", "Regular", "Buena", "Muy buena", "Excelente"];
 
 export function CourtReviewAction({ courtId, courtName }: { courtId: number; courtName: string }) {
- const [open, setOpen] = useState(false); const [state, action, pending] = useActionState(createCourtReview, undefined);
- return <><button type="button" onClick={() => setOpen(true)} className="rounded-lg border border-amber-400/50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-50">Calificar</button>{open && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"><div className="relative w-full max-w-md rounded-2xl bg-card p-6 shadow-xl"><button onClick={() => setOpen(false)} className="absolute right-4 top-4 text-muted-foreground"><X size={20}/></button><h2 className="text-xl font-bold">¿Cómo fue {courtName}?</h2><p className="mt-2 text-sm text-muted-foreground">Tu reseña será visible para otros jugadores.</p><form action={action} className="mt-5 space-y-4"><input type="hidden" name="courtId" value={courtId}/><label className="block text-sm font-semibold">Calificación<select required name="rating" defaultValue="5" className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2"><option value="5">★★★★★ Excelente</option><option value="4">★★★★ Muy buena</option><option value="3">★★★ Buena</option><option value="2">★★ Regular</option><option value="1">★ Mala</option></select></label><label className="block text-sm font-semibold">Comentario<textarea name="comment" maxLength={500} className="mt-1 block min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2" placeholder="Cuéntanos sobre la cancha..."/></label>{state?.error && <p className="text-sm text-destructive">{state.error}</p>}{state?.success && <p className="text-sm text-emerald-600">{state.success}</p>}<button disabled={pending} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60"><Star size={16}/>{pending ? "Enviando..." : "Publicar reseña"}</button></form></div></div>}</>;
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [state, formAction] = useActionState(createCourtReview, undefined);
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="rounded-xl border border-amber-400/50 px-3 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-50">Calificar</button>
+
+      <Modal open={open} onClose={() => setOpen(false)} title={`¿Cómo fue ${courtName}?`} description="Tu reseña será visible para otros jugadores.">
+        <form action={formAction} className="flex flex-col gap-4">
+          <input type="hidden" name="courtId" value={courtId} />
+          <input type="hidden" name="rating" value={rating} />
+
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-semibold">Calificación</legend>
+            <div className="flex items-center gap-1" role="radiogroup" aria-label="Calificación">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button key={value} type="button" role="radio" aria-checked={rating === value} aria-label={`${value} estrellas`} onClick={() => setRating(value)} className="rounded-lg p-1 transition hover:scale-110">
+                  <Star size={28} className={value <= rating ? "fill-amber-400 text-amber-400" : "text-border"} />
+                </button>
+              ))}
+              <span className="ml-2 text-sm font-semibold text-muted-foreground">{RATING_LABEL[rating]}</span>
+            </div>
+          </fieldset>
+
+          <TextareaField id={`comment-${courtId}`} name="comment" label="Comentario" optional rows={4} maxLength={500} placeholder="Cuéntanos sobre la cancha…" />
+
+          {state?.error && <Notice tone="error">{state.error}</Notice>}
+          {state?.success && <Notice tone="success">{state.success}</Notice>}
+          <ConfirmButton message="Tu reseña se publicará y será visible para otros jugadores." confirmLabel="Sí, publicar" pendingText="Enviando…"><Star size={16} />Publicar reseña</ConfirmButton>
+        </form>
+      </Modal>
+    </>
+  );
 }

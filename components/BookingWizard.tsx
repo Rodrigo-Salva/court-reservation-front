@@ -1,5 +1,7 @@
 "use client";
 
+import { Switch, ConfirmButton } from "@/components/forms";
+import { Notice, inputClass } from "@/components/ui";
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
 import { Calendar, ChevronLeft, ChevronRight, Package, Repeat } from "lucide-react";
@@ -60,7 +62,7 @@ export function BookingWizard({
   const [usesPackage, setUsesPackage] = useState(false);
   const [isRecurrent, setIsRecurrent] = useState(false);
   const [numberOfWeeks, setNumberOfWeeks] = useState(4);
-  const [state, formAction, pending] = useActionState(createBooking, undefined);
+  const [state, formAction] = useActionState(createBooking, undefined);
 
   function handleSlotClick(index: number) {
     if (slots[index].status !== "free") return;
@@ -138,9 +140,9 @@ export function BookingWizard({
           </div>
 
           {bestPackage && (
-            <label
+            <div
               className={`flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm ${
-                canUsePackage ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
+                canUsePackage ? "" : "opacity-50"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -157,14 +159,8 @@ export function BookingWizard({
                   </p>
                 </div>
               </div>
-              <input
-                type="checkbox"
-                checked={usesPackage}
-                disabled={!canUsePackage}
-                onChange={(e) => setUsesPackage(e.target.checked)}
-                className="h-5 w-9 accent-[#22c55e]"
-              />
-            </label>
+              <Switch label="Usar paquete de horas" checked={usesPackage} disabled={!canUsePackage} onChange={setUsesPackage} />
+            </div>
           )}
 
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -181,12 +177,7 @@ export function BookingWizard({
                 </p>
               </div>
             </div>
-            <input
-              type="checkbox"
-              checked={isRecurrent}
-              onChange={(e) => setIsRecurrent(e.target.checked)}
-              className="h-5 w-9 accent-[#22c55e]"
-            />
+            <Switch label="Reserva recurrente" checked={isRecurrent} onChange={setIsRecurrent} />
           </div>
 
           {isRecurrent && (
@@ -200,8 +191,8 @@ export function BookingWizard({
                 min={2}
                 max={12}
                 value={numberOfWeeks}
-                onChange={(e) => setNumberOfWeeks(Number(e.target.value))}
-                className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+                onChange={(e) => setNumberOfWeeks(Math.min(12, Math.max(2, Number(e.target.value) || 2)))}
+                className={`${inputClass} w-20 text-center`}
               />
               <span className="text-sm text-muted-foreground">semanas</span>
             </div>
@@ -276,9 +267,7 @@ export function BookingWizard({
           )}
 
           {state?.error && (
-            <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {state.error}
-            </p>
+            <div className="mt-4"><Notice tone="error">{state.error}</Notice></div>
           )}
 
           <form action={formAction} className="mt-4">
@@ -294,13 +283,7 @@ export function BookingWizard({
             {isRecurrent && (
               <input type="hidden" name="numberOfWeeks" value={numberOfWeeks} />
             )}
-            <button
-              type="submit"
-              disabled={pending}
-              className="w-full rounded-lg bg-[#22c55e] py-3 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {pending ? "Confirmando..." : "Confirmar reserva"}
-            </button>
+            <ConfirmButton message="Se creará tu reserva con el horario y precio mostrados." confirmLabel="Sí, reservar" pendingText="Confirmando…" className="inline-flex w-full items-center justify-center rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-sm hover:brightness-95">Confirmar reserva</ConfirmButton>
           </form>
         </div>
       </div>
