@@ -4,95 +4,83 @@ import { useActionState, useEffect, useState } from "react";
 import { Pencil, Plus, X, Settings2 } from "lucide-react";
 import { savePackage, togglePackageActive } from "@/app/actions/admin";
 import type { PackageResponseDTO } from "@/lib/definitions";
+import { TextField, ConfirmButton } from "@/components/forms";
+import { Notice, StatusPill, primaryButton, secondaryButton } from "@/components/ui";
+import { AdminCard, Pager, rowButton, tdClass, thClass, usePaged } from "@/components/admin/shared";
 
 export function PackageManager({ packages }: { packages: PackageResponseDTO[] }) {
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const paged = usePaged(packages, 8);
 
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between p-5">
-        <h2 className="font-display text-lg font-bold text-foreground">Paquetes</h2>
-        <button
-          type="button"
-          onClick={() => setEditingId(editingId === "new" ? null : "new")}
-          className="flex items-center gap-1 rounded-lg bg-[#22c55e] px-3 py-1.5 text-sm font-bold text-white hover:opacity-90"
-        >
-          <Plus size={16} />
-          Crear nuevo
+    <AdminCard
+      title="Paquetes de horas"
+      subtitle={`${packages.length} paquetes registrados`}
+      action={
+        <button type="button" onClick={() => setEditingId(editingId === "new" ? null : "new")} className={primaryButton}>
+          <Plus size={16} />Nuevo paquete
         </button>
-      </div>
-
+      }
+    >
       {editingId === "new" && (
         <div className="px-5 pb-5">
           <PackageForm onDone={() => setEditingId(null)} />
         </div>
       )}
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-y border-border text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            <th className="px-5 py-3">Nombre</th>
-            <th className="px-5 py-3">Horas</th>
-            <th className="px-5 py-3">Precio</th>
-            <th className="px-5 py-3">Estado</th>
-            <th className="px-5 py-3 w-16"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {packages.map((pkg) =>
-            editingId === pkg.id ? (
-              <tr key={pkg.id}>
-                <td colSpan={5} className="px-5 py-4">
-                  <PackageForm pkg={pkg} onDone={() => setEditingId(null)} />
-                </td>
-              </tr>
-            ) : (
-              <tr key={pkg.id} className="hover:bg-secondary/40">
-                <td className="px-5 py-3 font-medium text-foreground">{pkg.name}</td>
-                <td className="px-5 py-3 text-muted-foreground">
-                  {pkg.hoursQuantity}h · {Math.round(pkg.discountPercentage * 100)}% dcto
-                </td>
-                <td className="px-5 py-3 text-muted-foreground">S/ {pkg.price}</td>
-                <td className="px-5 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                      pkg.active
-                        ? "bg-[#dcfce7] text-[#166534]"
-                        : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    {pkg.active ? "Activo" : "Inactivo"}
-                  </span>
-                </td>
-                <td className="px-5 py-3">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(pkg.id)}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      title="Editar"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <form action={togglePackageActive}>
-                      <input type="hidden" name="id" value={pkg.id} />
-                      <input type="hidden" name="active" value={String(pkg.active)} />
-                      <button
-                        type="submit"
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                        title={pkg.active ? "Desactivar" : "Activar"}
-                      >
-                        <Settings2 size={14} />
-                      </button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-            )
-          )}
-        </tbody>
-      </table>
-    </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-160 text-sm">
+          <thead>
+            <tr className="border-y border-border bg-secondary/40">
+              <th className={thClass}>Paquete</th>
+              <th className={thClass}>Horas</th>
+              <th className={thClass}>Descuento</th>
+              <th className={thClass}>Precio</th>
+              <th className={thClass}>Estado</th>
+              <th className={`${thClass} text-right`}>Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {paged.items.map((pkg) =>
+              editingId === pkg.id ? (
+                <tr key={pkg.id}>
+                  <td colSpan={6} className="px-5 py-4">
+                    <PackageForm pkg={pkg} onDone={() => setEditingId(null)} />
+                  </td>
+                </tr>
+              ) : (
+                <tr key={pkg.id} className="transition hover:bg-secondary/40">
+                  <td className={`${tdClass} font-semibold`}>{pkg.name}</td>
+                  <td className={`${tdClass} text-muted-foreground`}>{pkg.hoursQuantity} h</td>
+                  <td className={`${tdClass} text-muted-foreground`}>{Math.round(pkg.discountPercentage * 100)}%</td>
+                  <td className={`${tdClass} font-semibold`}>S/ {pkg.price}</td>
+                  <td className={tdClass}><StatusPill tone={pkg.active ? "success" : "neutral"}>{pkg.active ? "Activo" : "Inactivo"}</StatusPill></td>
+                  <td className={tdClass}>
+                    <div className="flex items-center justify-end gap-2">
+                      <button type="button" onClick={() => setEditingId(pkg.id)} className={rowButton}><Pencil size={13} />Editar</button>
+                      <form action={togglePackageActive}>
+                        <input type="hidden" name="id" value={pkg.id} />
+                        <input type="hidden" name="active" value={String(pkg.active)} />
+                        <ConfirmButton
+                          title={pkg.active ? "Desactivar paquete" : "Activar paquete"}
+                          message={pkg.active ? `"${pkg.name}" dejará de estar a la venta.` : `"${pkg.name}" volverá a estar a la venta.`}
+                          confirmLabel={pkg.active ? "Sí, desactivar" : "Sí, activar"}
+                          tone={pkg.active ? "danger" : "primary"}
+                          className={rowButton}
+                        >
+                          <Settings2 size={13} />{pkg.active ? "Desactivar" : "Activar"}
+                        </ConfirmButton>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+      <Pager page={paged.page} totalPages={paged.totalPages} total={paged.total} onPage={paged.setPage} />
+    </AdminCard>
   );
 }
 
@@ -103,106 +91,39 @@ function PackageForm({
   pkg?: PackageResponseDTO;
   onDone: () => void;
 }) {
-  const [state, formAction, pending] = useActionState(savePackage, undefined);
+  const [state, formAction] = useActionState(savePackage, undefined);
 
   useEffect(() => {
     if (state?.success) onDone();
   }, [state, onDone]);
 
+  const key = pkg?.id ?? "new";
+
   return (
-    <form
-      action={formAction}
-      className="flex flex-col gap-3 rounded-2xl border border-[#22c55e] bg-background p-4"
-    >
+    <form action={formAction} className="flex flex-col gap-5 rounded-2xl border border-primary/40 bg-background p-5">
       <div className="flex items-center justify-between">
-        <p className="font-bold text-foreground text-sm">
-          {pkg ? "Editar paquete" : "Nuevo paquete"}
-        </p>
-        <button type="button" onClick={onDone} className="text-muted-foreground">
+        <p className="font-display text-base font-bold">{pkg ? "Editar paquete" : "Nuevo paquete"}</p>
+        <button type="button" onClick={onDone} aria-label="Cerrar" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary">
           <X size={16} />
         </button>
       </div>
 
       {pkg && <input type="hidden" name="id" value={pkg.id} />}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Nombre" name="name" defaultValue={pkg?.name} error={state?.fieldErrors?.name} />
-        <Field
-          label="Horas"
-          name="hoursQuantity"
-          type="number"
-          defaultValue={pkg?.hoursQuantity}
-          error={state?.fieldErrors?.hoursQuantity}
-        />
-        <Field
-          label="Precio (S/)"
-          name="price"
-          type="number"
-          step="0.01"
-          defaultValue={pkg?.price}
-          error={state?.fieldErrors?.price}
-        />
-        <Field
-          label="Descuento (%)"
-          name="discountPercentage"
-          type="number"
-          step="1"
-          defaultValue={pkg ? Math.round(pkg.discountPercentage * 100) : undefined}
-          error={state?.fieldErrors?.discountPercentage}
-        />
-        <Field
-          label="Vigencia (días)"
-          name="validityDays"
-          type="number"
-          defaultValue={pkg?.validityDays}
-          error={state?.fieldErrors?.validityDays}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <TextField id={`pkg-name-${key}`} name="name" label="Nombre" defaultValue={pkg?.name} error={state?.fieldErrors?.name} wrapperClassName="sm:col-span-2" />
+        <TextField id={`pkg-hours-${key}`} name="hoursQuantity" label="Horas incluidas" type="number" min={1} defaultValue={pkg?.hoursQuantity} error={state?.fieldErrors?.hoursQuantity} />
+        <TextField id={`pkg-price-${key}`} name="price" label="Precio (S/)" type="number" min={0} step="0.01" defaultValue={pkg?.price} error={state?.fieldErrors?.price} />
+        <TextField id={`pkg-discount-${key}`} name="discountPercentage" label="Descuento (%)" type="number" min={0} max={100} step="1" defaultValue={pkg ? Math.round(pkg.discountPercentage * 100) : undefined} error={state?.fieldErrors?.discountPercentage} />
+        <TextField id={`pkg-validity-${key}`} name="validityDays" label="Vigencia (días)" type="number" min={1} defaultValue={pkg?.validityDays} error={state?.fieldErrors?.validityDays} />
       </div>
 
-      {state?.error && (
-        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
+      {state?.error && <Notice tone="error">{state.error}</Notice>}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-fit rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60"
-      >
-        {pending ? "Guardando..." : "Guardar"}
-      </button>
+      <div className="flex gap-3">
+        <ConfirmButton message={pkg ? "Se guardarán los cambios de este paquete." : "Se creará el nuevo paquete."} confirmLabel="Sí, guardar" pendingText="Guardando…">Guardar</ConfirmButton>
+        <button type="button" onClick={onDone} className={secondaryButton}>Cancelar</button>
+      </div>
     </form>
-  );
-}
-
-function Field({
-  label,
-  name,
-  type = "text",
-  step,
-  defaultValue,
-  error,
-}: {
-  label: string;
-  name: string;
-  type?: string;
-  step?: string;
-  defaultValue?: string | number;
-  error?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-foreground">{label}</label>
-      <input
-        name={name}
-        type={type}
-        step={step}
-        required
-        defaultValue={defaultValue}
-        className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
-      />
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
   );
 }

@@ -53,17 +53,15 @@ export function AdminDashboard({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-6 border-b border-border">
+      <div role="tablist" className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1 shadow-sm">
         {tabs.map((t) => (
           <button
             key={t}
             type="button"
+            role="tab"
+            aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`px-1 pb-3 text-sm font-semibold border-b-2 -mb-px transition-colors ${
-              tab === t
-                ? "border-[#22c55e] text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
+            className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-bold transition ${tab === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
           >
             {t}
           </button>

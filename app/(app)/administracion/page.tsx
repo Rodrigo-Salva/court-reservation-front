@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { computeAdminStats } from "@/lib/adminStats";
+import { Notice, PageHeader } from "@/components/ui";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import type {
   BookingResponseDTO,
@@ -62,14 +63,13 @@ export default async function AdministracionPage({ searchParams }: { searchParam
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-foreground">Administración</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isAdmin ? "Vista general del negocio, canchas, usuarios y paquetes." : "Vista general y canchas de tu sede."}
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Gestión"
+        title="Administración"
+        description={isAdmin ? "Vista general del negocio, canchas, usuarios y paquetes." : "Vista general y canchas de tu sede."}
+      />
 
-      {error && <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+      {error && <Notice tone="error">{error}</Notice>}
 
       {!error && (
         <AdminDashboard

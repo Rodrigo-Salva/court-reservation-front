@@ -5,99 +5,83 @@ import { Pencil, Plus, X, Settings2 } from "lucide-react";
 import { saveCourt, toggleCourtActive } from "@/app/actions/admin";
 import { SPORT_TYPES, type CourtResponseDTO, type VenueResponseDTO } from "@/lib/definitions";
 import { sportLabel } from "@/lib/sport";
+import { SelectField, TextField, TextareaField, ConfirmButton } from "@/components/forms";
+import { Notice, StatusPill, primaryButton, secondaryButton } from "@/components/ui";
+import { AdminCard, Pager, rowButton, tdClass, thClass, usePaged } from "@/components/admin/shared";
 
 export function CourtManager({ courts, venues }: { courts: CourtResponseDTO[]; venues: VenueResponseDTO[] }) {
   const [editingId, setEditingId] = useState<number | "new" | null>(null);
+  const paged = usePaged(courts, 8);
 
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between p-5">
-        <h2 className="font-display text-lg font-bold text-foreground">Canchas</h2>
-        <button
-          type="button"
-          onClick={() => setEditingId(editingId === "new" ? null : "new")}
-          className="flex items-center gap-1 rounded-lg bg-[#22c55e] px-3 py-1.5 text-sm font-bold text-white hover:opacity-90"
-        >
-          <Plus size={16} />
-          Crear nuevo
+    <AdminCard
+      title="Canchas"
+      subtitle={`${courts.length} canchas registradas`}
+      action={
+        <button type="button" onClick={() => setEditingId(editingId === "new" ? null : "new")} className={primaryButton}>
+          <Plus size={16} />Nueva cancha
         </button>
-      </div>
-
+      }
+    >
       {editingId === "new" && (
         <div className="px-5 pb-5">
           <CourtForm venues={venues} onDone={() => setEditingId(null)} />
         </div>
       )}
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-y border-border text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            <th className="px-5 py-3">Nombre</th>
-            <th className="px-5 py-3">Sede</th>
-            <th className="px-5 py-3">Tipo</th>
-            <th className="px-5 py-3">Precio</th>
-            <th className="px-5 py-3">Estado</th>
-            <th className="px-5 py-3 w-16"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {courts.map((court) =>
-            editingId === court.id ? (
-              <tr key={court.id}>
-                <td colSpan={6} className="px-5 py-4">
-                  <CourtForm court={court} venues={venues} onDone={() => setEditingId(null)} />
-                </td>
-              </tr>
-            ) : (
-              <tr key={court.id} className="hover:bg-secondary/40">
-                <td className="px-5 py-3 font-medium text-foreground">{court.name}</td>
-                <td className="px-5 py-3 text-muted-foreground">{court.venueName ?? "Sin sede"}</td>
-                <td className="px-5 py-3 text-muted-foreground">
-                  {sportLabel(court.sportType)}
-                </td>
-                <td className="px-5 py-3 text-muted-foreground">
-                  S/ {court.basePricePerHour}
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                      court.active
-                        ? "bg-[#dcfce7] text-[#166534]"
-                        : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    {court.active ? "Activa" : "Inactiva"}
-                  </span>
-                </td>
-                <td className="px-5 py-3">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(court.id)}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      title="Editar"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <form action={toggleCourtActive}>
-                      <input type="hidden" name="id" value={court.id} />
-                      <input type="hidden" name="active" value={String(court.active)} />
-                      <button
-                        type="submit"
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                        title={court.active ? "Desactivar" : "Activar"}
-                      >
-                        <Settings2 size={14} />
-                      </button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-            )
-          )}
-        </tbody>
-      </table>
-    </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-160 text-sm">
+          <thead>
+            <tr className="border-y border-border bg-secondary/40">
+              <th className={thClass}>Cancha</th>
+              <th className={thClass}>Sede</th>
+              <th className={thClass}>Deporte</th>
+              <th className={thClass}>Precio / hora</th>
+              <th className={thClass}>Estado</th>
+              <th className={`${thClass} text-right`}>Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {paged.items.map((court) =>
+              editingId === court.id ? (
+                <tr key={court.id}>
+                  <td colSpan={6} className="px-5 py-4">
+                    <CourtForm court={court} venues={venues} onDone={() => setEditingId(null)} />
+                  </td>
+                </tr>
+              ) : (
+                <tr key={court.id} className="transition hover:bg-secondary/40">
+                  <td className={`${tdClass} font-semibold`}>{court.name}</td>
+                  <td className={`${tdClass} text-muted-foreground`}>{court.venueName ?? "Sin sede"}</td>
+                  <td className={`${tdClass} text-muted-foreground`}>{sportLabel(court.sportType)}</td>
+                  <td className={`${tdClass} font-semibold`}>S/ {court.basePricePerHour}</td>
+                  <td className={tdClass}><StatusPill tone={court.active ? "success" : "neutral"}>{court.active ? "Activa" : "Inactiva"}</StatusPill></td>
+                  <td className={tdClass}>
+                    <div className="flex items-center justify-end gap-2">
+                      <button type="button" onClick={() => setEditingId(court.id)} className={rowButton}><Pencil size={13} />Editar</button>
+                      <form action={toggleCourtActive}>
+                        <input type="hidden" name="id" value={court.id} />
+                        <input type="hidden" name="active" value={String(court.active)} />
+                        <ConfirmButton
+                          title={court.active ? "Desactivar cancha" : "Activar cancha"}
+                          message={court.active ? `"${court.name}" dejará de aparecer para reservas.` : `"${court.name}" volverá a estar disponible para reservas.`}
+                          confirmLabel={court.active ? "Sí, desactivar" : "Sí, activar"}
+                          tone={court.active ? "danger" : "primary"}
+                          className={rowButton}
+                        >
+                          <Settings2 size={13} />{court.active ? "Desactivar" : "Activar"}
+                        </ConfirmButton>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
+      <Pager page={paged.page} totalPages={paged.totalPages} total={paged.total} onPage={paged.setPage} />
+    </AdminCard>
   );
 }
 
@@ -110,124 +94,47 @@ function CourtForm({
   venues: VenueResponseDTO[];
   onDone: () => void;
 }) {
-  const [state, formAction, pending] = useActionState(saveCourt, undefined);
+  const [state, formAction] = useActionState(saveCourt, undefined);
 
   useEffect(() => {
     if (state?.success) onDone();
   }, [state, onDone]);
 
+  const key = court?.id ?? "new";
+
   return (
-    <form
-      action={formAction}
-      className="flex flex-col gap-3 rounded-2xl border border-[#22c55e] bg-background p-4"
-    >
+    <form action={formAction} className="flex flex-col gap-5 rounded-2xl border border-primary/40 bg-background p-5">
       <div className="flex items-center justify-between">
-        <p className="font-bold text-foreground text-sm">
-          {court ? "Editar cancha" : "Nueva cancha"}
-        </p>
-        <button type="button" onClick={onDone} className="text-muted-foreground">
+        <p className="font-display text-base font-bold">{court ? "Editar cancha" : "Nueva cancha"}</p>
+        <button type="button" onClick={onDone} aria-label="Cerrar" className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary">
           <X size={16} />
         </button>
       </div>
 
       {court && <input type="hidden" name="id" value={court.id} />}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Nombre" name="name" defaultValue={court?.name} error={state?.fieldErrors?.name} />
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-foreground">Deporte</label>
-          <select
-            name="sportType"
-            defaultValue={court?.sportType ?? SPORT_TYPES[0].value}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
-          >
-            {SPORT_TYPES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <TextField id={`court-name-${key}`} name="name" label="Nombre" defaultValue={court?.name} error={state?.fieldErrors?.name} />
+        <SelectField id={`court-sport-${key}`} name="sportType" label="Deporte" defaultValue={court?.sportType ?? SPORT_TYPES[0].value}>
+          {SPORT_TYPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </SelectField>
         {venues.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-foreground">Sede</label>
-            <select
-              name="venueId"
-              required
-              defaultValue={court?.venueId ?? ""}
-              className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
-            >
-              <option value="" disabled>Selecciona una sede</option>
-              {venues.filter((v) => v.active || v.id === court?.venueId).map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </select>
-          </div>
+          <SelectField id={`court-venue-${key}`} name="venueId" label="Sede" required defaultValue={court?.venueId ?? ""}>
+            <option value="" disabled>Selecciona una sede</option>
+            {venues.filter((v) => v.active || v.id === court?.venueId).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </SelectField>
         )}
-        <Field
-          label="Capacidad"
-          name="capacity"
-          type="number"
-          defaultValue={court?.capacity}
-          error={state?.fieldErrors?.capacity}
-        />
-        <Field
-          label="Precio/hora (S/)"
-          name="basePricePerHour"
-          type="number"
-          step="0.01"
-          defaultValue={court?.basePricePerHour}
-          error={state?.fieldErrors?.basePricePerHour}
-        />
-        <div className="sm:col-span-2">
-          <Field label="Descripción" name="description" defaultValue={court?.description} />
-        </div>
+        <TextField id={`court-capacity-${key}`} name="capacity" label="Capacidad" type="number" min={1} defaultValue={court?.capacity} error={state?.fieldErrors?.capacity} hint="Jugadores máximos." />
+        <TextField id={`court-price-${key}`} name="basePricePerHour" label="Precio por hora (S/)" type="number" min={0} step="0.01" defaultValue={court?.basePricePerHour} error={state?.fieldErrors?.basePricePerHour} hint="Precio base; se ajusta por horario y membresía." />
+        <TextareaField id={`court-desc-${key}`} name="description" label="Descripción" optional rows={2} defaultValue={court?.description} wrapperClassName="sm:col-span-2" />
       </div>
 
-      {state?.error && (
-        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
+      {state?.error && <Notice tone="error">{state.error}</Notice>}
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-fit rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-60"
-      >
-        {pending ? "Guardando..." : "Guardar"}
-      </button>
+      <div className="flex gap-3">
+        <ConfirmButton message={court ? "Se guardarán los cambios de esta cancha." : "Se creará la nueva cancha."} confirmLabel="Sí, guardar" pendingText="Guardando…">Guardar</ConfirmButton>
+        <button type="button" onClick={onDone} className={secondaryButton}>Cancelar</button>
+      </div>
     </form>
-  );
-}
-
-function Field({
-  label,
-  name,
-  type = "text",
-  step,
-  defaultValue,
-  error,
-}: {
-  label: string;
-  name: string;
-  type?: string;
-  step?: string;
-  defaultValue?: string | number;
-  error?: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-foreground">{label}</label>
-      <input
-        name={name}
-        type={type}
-        step={step}
-        required={name !== "description"}
-        defaultValue={defaultValue}
-        className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
-      />
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
   );
 }
