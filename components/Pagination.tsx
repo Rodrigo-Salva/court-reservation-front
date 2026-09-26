@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { pageWindow } from "@/components/ui";
 
 type PaginationProps = {
   basePath: string;
-  page: number; // base 0, como devuelve la API
+  page: number; // base 0
   totalPages: number;
   totalElements: number;
   params?: Record<string, string | undefined>;
   pageParam?: string;
 };
 
-/** Enlaces anterior/siguiente que conservan los filtros de la URL. Se renderiza en el servidor. */
+/** Paginación por enlaces con números de página; conserva los filtros de la URL. */
 export function Pagination({ basePath, page, totalPages, totalElements, params = {}, pageParam = "page" }: PaginationProps) {
   if (totalPages <= 1) {
     return <p className="text-xs text-muted-foreground">{totalElements} resultado(s)</p>;
@@ -26,26 +27,41 @@ export function Pagination({ basePath, page, totalPages, totalElements, params =
     return text ? `${basePath}?${text}` : basePath;
   };
 
-  const linkClass = "inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-bold hover:bg-secondary";
-  const disabledClass = "inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-bold opacity-40";
+  const base = "inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-lg border px-2.5 text-xs font-bold transition";
+  const idle = `${base} border-border bg-card hover:bg-secondary`;
+  const disabled = `${base} border-border opacity-40`;
 
   return (
     <nav aria-label="Paginación" className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-xs text-muted-foreground">
         Página {page + 1} de {totalPages} · {totalElements} resultado(s)
       </p>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-1.5">
         {page > 0 ? (
-          <Link href={hrefFor(page - 1)} className={linkClass}><ChevronLeft size={14} />Anterior</Link>
+          <Link href={hrefFor(page - 1)} className={idle} aria-label="Página anterior"><ChevronLeft size={14} />Anterior</Link>
         ) : (
-          <span className={disabledClass}><ChevronLeft size={14} />Anterior</span>
+          <span className={disabled}><ChevronLeft size={14} />Anterior</span>
+        )}
+        {pageWindow(page, totalPages).map((target) =>
+          target === page ? (
+            <span key={target} aria-current="page" className={`${base} border-primary bg-primary text-primary-foreground`}>{target + 1}</span>
+          ) : (
+            <Link key={target} href={hrefFor(target)} className={idle} aria-label={`Página ${target + 1}`}>{target + 1}</Link>
+          ),
         )}
         {page + 1 < totalPages ? (
-          <Link href={hrefFor(page + 1)} className={linkClass}>Siguiente<ChevronRight size={14} /></Link>
+          <Link href={hrefFor(page + 1)} className={idle} aria-label="Página siguiente">Siguiente<ChevronRight size={14} /></Link>
         ) : (
-          <span className={disabledClass}>Siguiente<ChevronRight size={14} /></span>
+          <span className={disabled}>Siguiente<ChevronRight size={14} /></span>
         )}
       </div>
     </nav>
   );
+}
+
+/** Corta una lista en memoria para pantallas cuyos datos ya vienen completos del backend. */
+export function paginate<T>(items: readonly T[], rawPage: string | undefined, size: number) {
+  const totalPages = Math.max(1, Math.ceil(items.length / size));
+  const page = Math.min(Math.max(0, Number(rawPage) || 0), totalPages - 1);
+  return { page, totalPages, totalElements: items.length, items: items.slice(page * size, page * size + size) };
 }

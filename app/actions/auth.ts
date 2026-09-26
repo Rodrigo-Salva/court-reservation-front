@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { apiFetch, ApiError } from "@/lib/api";
 import { createSession, deleteSession, getSession } from "@/lib/session";
+import { homePathFor } from "@/lib/navigation";
 import type {
   AuthResponseDTO,
   LoginFormState,
@@ -24,11 +25,11 @@ async function resolveUserId(email: string, token: string): Promise<number> {
 }
 
 /** Solo permite redirigir de vuelta a una ruta interna (evita open redirects). */
-function safeNext(next: unknown): string {
+function safeNext(next: unknown, fallback = "/explorar"): string {
   if (typeof next === "string" && next.startsWith("/") && !next.startsWith("//")) {
     return next;
   }
-  return "/explorar";
+  return fallback;
 }
 
 export async function login(
@@ -42,6 +43,7 @@ export async function login(
     return { error: "Ingresa tu email y contraseña" };
   }
 
+  let landing = "/explorar";
   try {
     const auth = await apiFetch<AuthResponseDTO>("/api/auth/login", {
       method: "POST",
@@ -50,6 +52,7 @@ export async function login(
     const userId = await resolveUserId(email, auth.token);
 
     await createSession({ ...auth, userId, email });
+    landing = homePathFor(auth.role);
   } catch (error) {
     if (error instanceof ApiError) {
       return { error: error.message };
@@ -57,7 +60,7 @@ export async function login(
     return { error: "No se pudo conectar con el servidor. Intenta de nuevo." };
   }
 
-  redirect(safeNext(formData.get("next")));
+  redirect(safeNext(formData.get("next"), landing));
 }
 
 export async function register(

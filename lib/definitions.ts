@@ -50,6 +50,9 @@ export type UserResponseDTO = {
   active: boolean;
   membershipDiscount: number;
   maxDaysAdvance: number;
+  role?: string;
+  venueId?: number | null;
+  venueName?: string | null;
 };
 
 export type ProfileFormState =

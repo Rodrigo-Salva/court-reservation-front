@@ -22,40 +22,49 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { logout } from "@/app/actions/auth";
+import { visibleSections, type NavIcon } from "@/lib/navigation";
 
-const NAV_LINKS: { href: string; label: string; icon: LucideIcon; roles?: string[] }[] = [
-  { href: "/explorar", label: "Explorar", icon: Search },
-  { href: "/reservas", label: "Reservas", icon: Calendar },
-  { href: "/paquetes", label: "Paquetes", icon: Package },
-  { href: "/pagos", label: "Pagos", icon: CreditCard },
-  { href: "/espera", label: "Espera", icon: Clock },
-  { href: "/comunidad", label: "Comunidad", icon: Trophy },
-  { href: "/equipos", label: "Equipos", icon: UsersRound },
-  { href: "/perfil", label: "Perfil", icon: User },
-  { href: "/administracion", label: "Administración", icon: Settings, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
-  { href: "/recepcion", label: "Recepción", icon: ScanLine, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN", "RECEPTIONIST"] },
-  { href: "/bloqueos", label: "Bloqueos", icon: Ban, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
-  { href: "/transacciones", label: "Transacciones", icon: ReceiptText, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
-  { href: "/resenas", label: "Reseñas", icon: Star, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
-  { href: "/sedes", label: "Sedes", icon: Building2, roles: ["ADMIN", "SUPER_ADMIN"] },
-  { href: "/torneos", label: "Torneos", icon: Brackets, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
-  { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"] },
-];
+const ICONS: Record<NavIcon, LucideIcon> = {
+  search: Search,
+  calendar: Calendar,
+  package: Package,
+  payments: CreditCard,
+  clock: Clock,
+  community: Trophy,
+  teams: UsersRound,
+  reception: ScanLine,
+  blocks: Ban,
+  tournaments: Brackets,
+  admin: Settings,
+  transactions: ReceiptText,
+  reviews: Star,
+  reports: BarChart3,
+  venues: Building2,
+  profile: User,
+};
 
 export function Sidebar({
   name,
   email,
   role,
+  open = false,
+  onClose,
 }: {
   name: string;
   email: string;
   role: string;
+  open?: boolean;
+  onClose?: () => void;
 }) {
   const pathname = usePathname();
-  const links = NAV_LINKS.filter((link) => !link.roles || link.roles.includes(role));
+  const sections = visibleSections(role);
 
   return (
-    <aside className="flex flex-col w-[260px] border-r border-border bg-card h-screen shrink-0 sticky top-0">
+    <>
+    {open && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={onClose} aria-hidden />}
+    <aside
+      className={`fixed inset-y-0 left-0 z-40 flex w-65 flex-col border-r border-border bg-card transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+    >
       <div className="p-6 flex items-center gap-2">
         <div className="bg-[#4ade80] text-black p-1 rounded">
           <Zap size={20} className="fill-black" />
@@ -65,26 +74,34 @@ export function Sidebar({
         </span>
       </div>
 
-      <nav className="flex-1 px-4 flex flex-col gap-2 mt-2">
-        {links.map((link) => {
-          const isActive = pathname.startsWith(link.href);
-          const Icon = link.icon;
-          
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
-                isActive 
-                  ? "bg-[#dcfce7] text-[#166534]" 
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-            >
-              <Icon size={18} />
-              {link.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto px-4 flex flex-col gap-4 mt-2" aria-label="Navegación principal">
+        {sections.map((section) => (
+          <div key={section.title} className="flex flex-col gap-1">
+            <p className="px-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {section.title}
+            </p>
+            {section.items.map((link) => {
+              const isActive = pathname.startsWith(link.href);
+              const Icon = ICONS[link.icon];
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={onClose}
+                  className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-[#dcfce7] text-[#166534]"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  <Icon size={18} />
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <div className="p-4 mt-auto">
@@ -120,5 +137,6 @@ export function Sidebar({
         </div>
       </div>
     </aside>
+    </>
   );
 }
