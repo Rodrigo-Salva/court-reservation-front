@@ -1,12 +1,15 @@
-import { UsersRound } from "lucide-react";
+import { ConfirmButton } from "@/components/forms";
+import { Crown, LogOut, MailPlus, Send, UserMinus, UsersRound, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { cancelTeamInvitation, createTeam, inviteToTeam, leaveTeam, removeTeamMember, respondTeamInvitation } from "@/app/actions/teams";
+import { Pagination, paginate } from "@/components/Pagination";
+import { Avatar, EmptyState, Notice, PageHeader, StatusPill, cardClass, dangerButton, inputClass, primaryButton, secondaryButton } from "@/components/ui";
 import type { TeamInvitationDTO, TeamMemberDTO, TeamResponseDTO } from "@/lib/definitions";
 
-const inputClass = "mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2";
+const PAGE_SIZE = 3;
 
-export default async function EquiposPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string }> }) {
+export default async function EquiposPage({ searchParams }: { searchParams: Promise<{ success?: string; error?: string; page?: string }> }) {
   const s = await getSession();
   if (!s) return null;
   const p = await searchParams;
@@ -16,36 +19,36 @@ export default async function EquiposPage({ searchParams }: { searchParams: Prom
     apiFetch<TeamResponseDTO[]>("/api/teams", { token }).catch(() => [] as TeamResponseDTO[]),
     apiFetch<TeamInvitationDTO[]>("/api/teams/invitations/mine", { token }).catch(() => [] as TeamInvitationDTO[]),
   ]);
-  const details = await Promise.all(teams.map(async (team) => ({
-    team,
-    isOwner: team.ownerId === s.userId,
-    members: await apiFetch<TeamMemberDTO[]>(`/api/teams/${team.id}/members`, { token }).catch(() => [] as TeamMemberDTO[]),
-    pending: team.ownerId === s.userId
-      ? await apiFetch<TeamInvitationDTO[]>(`/api/teams/${team.id}/invitations`, { token }).catch(() => [] as TeamInvitationDTO[])
-      : [],
-  })));
+  // Solo se cargan los integrantes e invitaciones de los equipos de la página actual.
+  const view = paginate(teams, p.page, PAGE_SIZE);
+  const details = await Promise.all(view.items.map(async (team) => {
+    const isOwner = team.ownerId === s.userId;
+    return {
+      team,
+      isOwner,
+      members: await apiFetch<TeamMemberDTO[]>(`/api/teams/${team.id}/members`, { token }).catch(() => [] as TeamMemberDTO[]),
+      pending: isOwner ? await apiFetch<TeamInvitationDTO[]>(`/api/teams/${team.id}/invitations`, { token }).catch(() => [] as TeamInvitationDTO[]) : [],
+    };
+  }));
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Comunidad</p>
-        <h1 className="mt-1 font-display text-3xl font-bold">Equipos</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Crea tu equipo e invita a otros jugadores por email. Ellos deciden si se unen.</p>
-      </div>
-      {p.success && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{p.success}</p>}
-      {p.error && <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{p.error}</p>}
+    <div className="flex flex-col gap-8">
+      <PageHeader eyebrow="Comunidad" title="Equipos" description="Crea tu equipo e invita a otros jugadores por email. Ellos deciden si se unen." />
+
+      {p.success && <Notice tone="success">{p.success}</Notice>}
+      {p.error && <Notice tone="error">{p.error}</Notice>}
 
       {invitations.length > 0 && (
-        <section className="rounded-2xl border border-primary/40 bg-primary/5 p-5">
-          <h2 className="font-display text-xl font-bold">Invitaciones recibidas ({invitations.length})</h2>
-          <ul className="mt-3 divide-y divide-border">
+        <section className="rounded-2xl border border-primary/40 bg-primary/5 p-5" aria-labelledby="recibidas">
+          <h2 id="recibidas" className="flex items-center gap-2 font-display text-lg font-bold"><MailPlus size={18} className="text-primary" />Invitaciones recibidas ({invitations.length})</h2>
+          <ul className="mt-3 divide-y divide-primary/20">
             {invitations.map((invitation) => (
               <li key={invitation.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <p className="text-sm"><strong>{invitation.invitedByName}</strong> te invitó al equipo <strong>{invitation.teamName}</strong></p>
                 <form action={respondTeamInvitation} className="flex gap-2">
                   <input type="hidden" name="id" value={invitation.id} />
-                  <button name="decision" value="accept" className="rounded-full bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground">Aceptar</button>
-                  <button name="decision" value="decline" className="rounded-full border border-border px-4 py-1.5 text-xs font-bold hover:bg-secondary">Rechazar</button>
+                  <ConfirmButton message="Aceptarás la invitación y te unirás al equipo." confirmLabel="Sí, aceptar" name="decision" value="accept" className={`${primaryButton} px-4! py-1.5! text-xs`}>Aceptar</ConfirmButton>
+                  <ConfirmButton message="Rechazarás la invitación al equipo." tone="danger" confirmLabel="Sí, rechazar" name="decision" value="decline" className={secondaryButton}>Rechazar</ConfirmButton>
                 </form>
               </li>
             ))}
@@ -53,86 +56,100 @@ export default async function EquiposPage({ searchParams }: { searchParams: Prom
         </section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <form action={createTeam} className="h-fit rounded-2xl border border-border bg-card p-5">
-          <h2 className="font-display text-xl font-bold">Crear equipo</h2>
-          <label className="mt-4 block text-sm font-semibold">Nombre<input required name="name" maxLength={80} className={inputClass} /></label>
-          <label className="mt-3 block text-sm font-semibold">Descripción<textarea name="description" maxLength={300} className={`${inputClass} min-h-24`} /></label>
-          <button className="mt-4 w-full rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground">Crear equipo</button>
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <form action={createTeam} className={`${cardClass} flex flex-col gap-4 p-5 lg:sticky lg:top-6`}>
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-xl bg-primary/15 text-emerald-800"><UsersRound size={19} /></span>
+            <div>
+              <h2 className="font-display text-lg font-bold">Crear equipo</h2>
+              <p className="text-xs text-muted-foreground">Serás el capitán o la capitana.</p>
+            </div>
+          </div>
+          <label className="text-sm font-semibold">Nombre<input required name="name" maxLength={80} className={`${inputClass} mt-1.5 font-normal`} /></label>
+          <label className="text-sm font-semibold">Descripción<textarea name="description" maxLength={300} rows={3} className={`${inputClass} mt-1.5 font-normal`} /></label>
+          <ConfirmButton message="Se creará el equipo y serás su capitán." confirmLabel="Sí, crear" className={primaryButton}>Crear equipo</ConfirmButton>
         </form>
 
-        <section className="lg:col-span-2">
-          <h2 className="mb-4 font-display text-xl font-bold">Mis equipos</h2>
-          {details.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">Todavía no perteneces a ningún equipo.</p>
+        <section className="flex flex-col gap-4 lg:col-span-2" aria-labelledby="mis-equipos">
+          <h2 id="mis-equipos" className="font-display text-xl font-bold">Mis equipos <span className="text-sm font-normal text-muted-foreground">({teams.length})</span></h2>
+
+          {teams.length === 0 ? (
+            <EmptyState icon={UsersRound} title="Todavía no perteneces a ningún equipo" description="Crea el primero con el formulario o espera una invitación." />
           ) : (
-            <div className="grid gap-4">
-              {details.map(({ team, isOwner, members, pending }) => (
-                <article key={team.id} className="rounded-2xl border border-border bg-card p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex gap-3">
-                      <UsersRound className="mt-1 text-primary" size={22} />
-                      <div>
-                        <h3 className="font-bold">{team.name}</h3>
-                        <p className="text-sm text-muted-foreground">{team.description || "Sin descripción"}</p>
-                      </div>
+            details.map(({ team, isOwner, members, pending }) => (
+              <article key={team.id} className={`${cardClass} overflow-hidden`}>
+                <header className="flex items-start justify-between gap-3 border-b border-border bg-secondary/40 px-5 py-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/15 text-emerald-800"><UsersRound size={20} /></span>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-bold">{team.name}</h3>
+                      <p className="truncate text-sm text-muted-foreground">{team.description || "Sin descripción"}</p>
                     </div>
-                    <span className="rounded-full bg-secondary px-2 py-1 text-xs font-bold">{isOwner ? "Capitán/a" : "Integrante"}</span>
+                  </div>
+                  <StatusPill tone={isOwner ? "warning" : "info"}>{isOwner ? "Capitán/a" : "Integrante"}</StatusPill>
+                </header>
+
+                <div className="flex flex-col gap-5 p-5">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Integrantes ({members.length})</h4>
+                    <ul className="mt-2 divide-y divide-border">
+                      {members.map((member) => (
+                        <li key={member.userId} className="flex items-center justify-between gap-3 py-2.5">
+                          <span className="flex items-center gap-2.5 text-sm font-medium">
+                            <Avatar name={member.name} />{member.name}
+                            {member.role === "OWNER" && <Crown size={13} className="text-amber-500" aria-label="Capitán/a" />}
+                          </span>
+                          {isOwner && member.role !== "OWNER" && (
+                            <form action={removeTeamMember}>
+                              <input type="hidden" name="teamId" value={team.id} />
+                              <input type="hidden" name="userId" value={member.userId} />
+                              <ConfirmButton message="Este integrante saldrá del equipo." tone="danger" confirmLabel="Sí, quitar" className={dangerButton}><UserMinus size={13} />Quitar</ConfirmButton>
+                            </form>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
 
-                  <h4 className="mt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">Integrantes ({members.length})</h4>
-                  <ul className="mt-2 divide-y divide-border">
-                    {members.map((member) => (
-                      <li key={member.userId} className="flex items-center justify-between py-2 text-sm">
-                        <span>{member.name}{member.role === "OWNER" && <span className="ml-2 text-xs text-muted-foreground">(capitán/a)</span>}</span>
-                        {isOwner && member.role !== "OWNER" && (
-                          <form action={removeTeamMember}>
-                            <input type="hidden" name="teamId" value={team.id} />
-                            <input type="hidden" name="userId" value={member.userId} />
-                            <button className="rounded-lg border border-border px-2 py-1 text-xs font-bold hover:bg-secondary">Quitar</button>
-                          </form>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-
                   {isOwner && (
-                    <>
-                      <form action={inviteToTeam} className="mt-4 flex gap-2">
+                    <div className="flex flex-col gap-3">
+                      <form action={inviteToTeam} className="flex gap-2">
                         <input type="hidden" name="teamId" value={team.id} />
-                        <input required name="email" type="email" placeholder="Email del jugador a invitar" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                        <button className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Invitar</button>
+                        <input required name="email" type="email" placeholder="Email del jugador a invitar" aria-label="Email a invitar" className={`${inputClass} min-w-0 flex-1`} />
+                        <ConfirmButton message="Se enviará la invitación a este correo." confirmLabel="Sí, invitar" className={primaryButton}><Send size={14} />Invitar</ConfirmButton>
                       </form>
                       {pending.length > 0 && (
-                        <>
-                          <h4 className="mt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">Invitaciones pendientes ({pending.length})</h4>
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Invitaciones pendientes ({pending.length})</h4>
                           <ul className="mt-2 divide-y divide-border">
                             {pending.map((invitation) => (
-                              <li key={invitation.id} className="flex items-center justify-between py-2 text-sm">
-                                <span>{invitation.invitedName} <span className="text-xs text-muted-foreground">{invitation.invitedEmail}</span></span>
+                              <li key={invitation.id} className="flex items-center justify-between gap-3 py-2.5">
+                                <span className="min-w-0 text-sm"><span className="font-medium">{invitation.invitedName}</span> <span className="text-xs text-muted-foreground">{invitation.invitedEmail}</span></span>
                                 <form action={cancelTeamInvitation}>
                                   <input type="hidden" name="teamId" value={team.id} />
                                   <input type="hidden" name="id" value={invitation.id} />
-                                  <button className="rounded-lg border border-border px-2 py-1 text-xs font-bold hover:bg-secondary">Cancelar</button>
+                                  <ConfirmButton message="Se cancelará la invitación pendiente." tone="danger" confirmLabel="Sí, cancelar invitación" className={secondaryButton}><X size={13} />Cancelar</ConfirmButton>
                                 </form>
                               </li>
                             ))}
                           </ul>
-                        </>
+                        </div>
                       )}
-                    </>
+                    </div>
                   )}
 
                   {!isOwner && (
-                    <form action={leaveTeam} className="mt-4">
+                    <form action={leaveTeam}>
                       <input type="hidden" name="teamId" value={team.id} />
-                      <button className="rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10">Abandonar equipo</button>
+                      <ConfirmButton message="Dejarás de ser parte de este equipo." tone="danger" confirmLabel="Sí, abandonar" className={dangerButton}><LogOut size={13} />Abandonar equipo</ConfirmButton>
                     </form>
                   )}
-                </article>
-              ))}
-            </div>
+                </div>
+              </article>
+            ))
           )}
+
+          {teams.length > 0 && <Pagination basePath="/equipos" page={view.page} totalPages={view.totalPages} totalElements={view.totalElements} />}
         </section>
       </div>
     </div>

@@ -1,10 +1,21 @@
+import { ConfirmButton } from "@/components/forms";
 import { redirect } from "next/navigation";
-import { Star } from "lucide-react";
+import { EyeOff, MessageSquareOff, Search, Star, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { moderateReview } from "@/app/actions/reviews";
 import { Pagination } from "@/components/Pagination";
+import { Avatar, EmptyState, FilterTabs, Notice, PageHeader, StatusPill, cardClass, dangerButton, inputClass, primaryButton, secondaryButton } from "@/components/ui";
 import type { CourtReviewResponseDTO, PageResponse } from "@/lib/definitions";
+
+const PAGE_SIZE = 8;
+const TABS = [
+  { label: "Todas", value: "" },
+  { label: "Visibles", value: "visible" },
+  { label: "Ocultas", value: "hidden" },
+] as const;
+
+const when = (value?: string) => value?.replace("T", " ").slice(0, 10) ?? "";
 
 export default async function ResenasPage({
   searchParams,
@@ -14,79 +25,110 @@ export default async function ResenasPage({
   const session = await getSession();
   if (!session || !["ADMIN", "SUPER_ADMIN", "VENUE_ADMIN"].includes(session.role)) redirect("/explorar");
   const { error, filter, q, page } = await searchParams;
+  const term = q?.trim() ?? "";
 
-  const query = new URLSearchParams({ size: "10", page: String(Math.max(0, Number(page) || 0)) });
-  if (filter) query.set("filter", filter);
-  if (q?.trim()) query.set("q", q.trim());
+  const fetchPage = (extra: Record<string, string>) => {
+    const query = new URLSearchParams(extra);
+    if (term) query.set("q", term);
+    return apiFetch<PageResponse<CourtReviewResponseDTO>>(`/api/court-reviews/moderation?${query}`, { token: session.token });
+  };
 
   let result: PageResponse<CourtReviewResponseDTO> | null = null;
   let loadError = "";
+  const counts: Record<string, number> = { "": 0, visible: 0, hidden: 0 };
   try {
-    result = await apiFetch<PageResponse<CourtReviewResponseDTO>>(`/api/court-reviews/moderation?${query}`, { token: session.token });
+    const listQuery: Record<string, string> = { size: String(PAGE_SIZE), page: String(Math.max(0, Number(page) || 0)) };
+    if (filter) listQuery.filter = filter;
+    const [list, all, visible, hidden] = await Promise.all([
+      fetchPage(listQuery),
+      fetchPage({ size: "1" }),
+      fetchPage({ size: "1", filter: "visible" }),
+      fetchPage({ size: "1", filter: "hidden" }),
+    ]);
+    result = list;
+    counts[""] = all.totalElements;
+    counts.visible = visible.totalElements;
+    counts.hidden = hidden.totalElements;
   } catch {
     loadError = "No se pudieron cargar las reseñas.";
   }
-  const shown: CourtReviewResponseDTO[] = result?.content ?? [];
+  const reviews = result?.content ?? [];
+  const tabHref = (value: string) => {
+    const params = new URLSearchParams();
+    if (value) params.set("filter", value);
+    if (term) params.set("q", term);
+    const text = params.toString();
+    return text ? `/resenas?${text}` : "/resenas";
+  };
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Administración</p>
-        <h1 className="mt-1 font-display text-3xl font-bold">Moderación de reseñas</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Oculta las reseñas inapropiadas (dejan de mostrarse en Explorar) o elimínalas definitivamente. {result?.totalElements ?? 0} reseña(s) con el filtro actual.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Gestión"
+        title="Moderación de reseñas"
+        description="Oculta las reseñas inapropiadas (dejan de mostrarse en Explorar) o elimínalas definitivamente."
+      />
 
-      {(error || loadError) && <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{error || loadError}</p>}
+      {(error || loadError) && <Notice tone="error">{error || loadError}</Notice>}
 
-      <form className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-4">
-        <input name="q" defaultValue={q ?? ""} placeholder="Buscar por cancha, autor o comentario" className="rounded-lg border border-border bg-background px-3 py-2 text-sm sm:col-span-2" />
-        <select name="filter" defaultValue={filter ?? ""} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-          <option value="">Todas</option>
-          <option value="visible">Visibles</option>
-          <option value="hidden">Ocultas</option>
-        </select>
-        <button className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Filtrar</button>
-      </form>
+      <section className={`${cardClass} flex flex-wrap items-center justify-between gap-3 p-4`}>
+        <FilterTabs items={TABS.map((tab) => ({ label: tab.label, href: tabHref(tab.value), active: (filter ?? "") === tab.value, count: counts[tab.value] }))} />
+        <form className="flex min-w-65 flex-1 gap-2 sm:max-w-md">
+          {filter && <input type="hidden" name="filter" value={filter} />}
+          <label className="relative flex-1">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input name="q" defaultValue={term} placeholder="Cancha, autor o comentario" aria-label="Buscar" className={`${inputClass} pl-9`} />
+          </label>
+          <button className={primaryButton}>Buscar</button>
+        </form>
+      </section>
 
-      {shown.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">No hay reseñas para mostrar.</p>
+      {reviews.length === 0 ? (
+        <EmptyState icon={MessageSquareOff} title="No hay reseñas para mostrar" description="Cambia el filtro o el texto de búsqueda." />
       ) : (
-        <div className="flex flex-col gap-3">
-          {shown.map((review) => (
-            <article key={review.id} className={`rounded-2xl border bg-card p-5 ${review.hidden ? "border-dashed border-amber-400/60 opacity-80" : "border-border"}`}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-bold">{review.courtName} <span className="text-xs font-normal text-muted-foreground">{review.venueName ? `· ${review.venueName}` : ""}</span></p>
-                  <p className="mt-1 flex items-center gap-1 text-amber-500" aria-label={`${review.rating} de 5`}>
-                    {Array.from({ length: 5 }, (_, index) => <Star key={index} size={14} className={index < review.rating ? "fill-current" : "opacity-25"} />)}
-                    <span className="ml-2 text-xs text-muted-foreground">{review.userName} · {review.createdAt?.replace("T", " ").slice(0, 16)}</span>
-                  </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {reviews.map((review) => (
+            <article key={review.id} className={`${cardClass} flex flex-col gap-3 p-5 ${review.hidden ? "border-dashed border-amber-300 bg-amber-50/40" : ""}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate font-bold">{review.courtName}</h2>
+                  <p className="truncate text-xs text-muted-foreground">{review.venueName ?? "Sin sede"}</p>
                 </div>
-                {review.hidden && <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">Oculta</span>}
+                {review.hidden ? <StatusPill tone="warning">Oculta</StatusPill> : <StatusPill tone="success">Visible</StatusPill>}
               </div>
-              <p className="mt-3 text-sm text-muted-foreground">{review.comment || "Sin comentario."}</p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <form action={moderateReview}>
-                  <input type="hidden" name="id" value={review.id} />
-                  <button name="decision" value={review.hidden ? "show" : "hide"} className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold hover:bg-secondary">
-                    {review.hidden ? "Volver a mostrar" : "Ocultar"}
-                  </button>
-                </form>
-                <details className="group">
-                  <summary className="cursor-pointer list-none rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/10">Eliminar…</summary>
-                  <form action={moderateReview} className="mt-2 flex items-center gap-2 rounded-lg bg-destructive/10 p-2">
+
+              <div className="flex items-center gap-1 text-amber-500" role="img" aria-label={`${review.rating} de 5 estrellas`}>
+                {Array.from({ length: 5 }, (_, index) => (
+                  <Star key={index} size={15} className={index < review.rating ? "fill-current" : "opacity-25"} />
+                ))}
+                <span className="ml-1.5 text-sm font-bold text-foreground">{review.rating}.0</span>
+              </div>
+
+              <p className="min-h-10 flex-1 text-sm text-muted-foreground">{review.comment ? `“${review.comment}”` : "Sin comentario."}</p>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Avatar name={review.userName} />
+                  <span><span className="font-semibold text-foreground">{review.userName}</span> · {when(review.createdAt)}</span>
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <form action={moderateReview}>
                     <input type="hidden" name="id" value={review.id} />
-                    <span className="text-xs text-destructive">Se eliminará para siempre.</span>
-                    <button name="decision" value="delete" className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-bold text-white">Confirmar</button>
+                    <ConfirmButton name="decision" value={review.hidden ? "show" : "hide"} message={review.hidden ? "La reseña volverá a ser visible para los jugadores." : "La reseña dejará de mostrarse a los jugadores."} confirmLabel={review.hidden ? "Sí, mostrar" : "Sí, ocultar"} className={secondaryButton}>
+                      <EyeOff size={13} />{review.hidden ? "Mostrar" : "Ocultar"}
+                    </ConfirmButton>
                   </form>
-                </details>
+                  <form action={moderateReview}>
+                    <input type="hidden" name="id" value={review.id} />
+                    <ConfirmButton name="decision" value="delete" tone="danger" message="La reseña se eliminará para siempre. Esta acción no se puede deshacer." confirmLabel="Sí, eliminar" className={dangerButton}><Trash2 size={13} />Eliminar</ConfirmButton>
+                  </form>
+                </div>
               </div>
             </article>
           ))}
         </div>
       )}
+
       {result && <Pagination basePath="/resenas" page={result.page} totalPages={result.totalPages} totalElements={result.totalElements} params={{ filter, q }} />}
     </div>
   );

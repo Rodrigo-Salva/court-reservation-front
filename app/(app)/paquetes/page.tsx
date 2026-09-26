@@ -1,129 +1,121 @@
+import { ConfirmButton } from "@/components/forms";
+import { CalendarClock, PackageOpen, Sparkles, Tag } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { purchasePackage } from "@/app/actions/packages";
+import { Pagination, paginate } from "@/components/Pagination";
+import { EmptyState, FilterTabs, Notice, PageHeader, StatusPill, cardClass, primaryButton } from "@/components/ui";
 import type { PackageResponseDTO, UserPackageResponseDTO } from "@/lib/definitions";
 
-export default async function PaquetesPage() {
+const PAGE_SIZE = 6;
+const SORTS = [
+  { label: "Mejor precio por hora", value: "precio" },
+  { label: "Mayor descuento", value: "descuento" },
+  { label: "Más horas", value: "horas" },
+] as const;
+
+const soles = (value: number) => `S/ ${Number(value).toLocaleString("es-PE", { maximumFractionDigits: 2 })}`;
+
+export default async function PaquetesPage({ searchParams }: { searchParams: Promise<{ sort?: string; page?: string; success?: string; error?: string }> }) {
   const session = await getSession();
+  const { sort: rawSort, page, success, error } = await searchParams;
+  const sort = SORTS.some((s) => s.value === rawSort) ? (rawSort as (typeof SORTS)[number]["value"]) : "precio";
 
   let packages: PackageResponseDTO[] = [];
   let packagesError: string | null = null;
   try {
-    packages = await apiFetch<PackageResponseDTO[]>("/api/packages", {
-      token: session?.token,
-    });
+    packages = await apiFetch<PackageResponseDTO[]>("/api/packages", { token: session?.token });
   } catch (err) {
-    packagesError =
-      err instanceof ApiError ? err.message : "No se pudieron cargar los paquetes.";
+    packagesError = err instanceof ApiError ? err.message : "No se pudieron cargar los paquetes.";
   }
 
   let myPackages: UserPackageResponseDTO[] = [];
   let myPackagesError: string | null = null;
   try {
-    myPackages = await apiFetch<UserPackageResponseDTO[]>(
-      `/api/user-packages/user/${session!.userId}/active`,
-      { token: session!.token }
-    );
+    myPackages = await apiFetch<UserPackageResponseDTO[]>(`/api/user-packages/user/${session!.userId}/active`, { token: session!.token });
   } catch (err) {
-    myPackagesError =
-      err instanceof ApiError ? err.message : "No se pudieron cargar tus paquetes.";
+    myPackagesError = err instanceof ApiError ? err.message : "No se pudieron cargar tus paquetes.";
   }
 
+  const bestValue = packages.length ? Math.min(...packages.map((p) => p.pricePerHour)) : 0;
+  const ordered = [...packages].sort((a, b) =>
+    sort === "descuento" ? b.discountPercentage - a.discountPercentage : sort === "horas" ? b.hoursQuantity - a.hoursQuantity : a.pricePerHour - b.pricePerHour,
+  );
+  const view = paginate(ordered, page, PAGE_SIZE);
+
   return (
-    <div>
-      <h1 className="font-display text-2xl font-bold text-foreground">
-        Mis paquetes
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Horas prepagadas con descuento para tus reservas.
-      </p>
+    <div className="flex flex-col gap-8">
+      <PageHeader eyebrow="Ahorra en cada reserva" title="Paquetes de horas" description="Compra horas prepagadas con descuento y úsalas al reservar. Si cancelas con anticipación, las horas vuelven a tu paquete." />
 
-      {myPackagesError && (
-        <p className="mt-6 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {myPackagesError}
-        </p>
-      )}
+      {success && <Notice tone="success">¡Compra realizada! Tu paquete ya está activo.</Notice>}
+      {error && <Notice tone="error">{error}</Notice>}
 
-      {!myPackagesError && myPackages.length === 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">
-          Todavía no tienes paquetes activos.
-        </p>
-      )}
+      <section className="flex flex-col gap-4" aria-labelledby="mis-paquetes">
+        <h2 id="mis-paquetes" className="font-display text-xl font-bold">Mis paquetes activos</h2>
+        {myPackagesError && <Notice tone="error">{myPackagesError}</Notice>}
+        {!myPackagesError && myPackages.length === 0 ? (
+          <EmptyState icon={PackageOpen} title="Todavía no tienes paquetes activos" description="Elige uno de los paquetes disponibles para empezar a ahorrar." />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {myPackages.map((owned) => {
+              const used = owned.initialHours - owned.remainingHours;
+              const percent = owned.initialHours > 0 ? Math.round((owned.remainingHours / owned.initialHours) * 100) : 0;
+              return (
+                <article key={owned.id} className={`${cardClass} flex flex-col gap-3 p-5`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-bold">{owned.packageName}</h3>
+                    <StatusPill tone={owned.daysUntilExpiration <= 7 ? "warning" : "success"}>
+                      <span className="inline-flex items-center gap-1"><CalendarClock size={11} />Vence en {owned.daysUntilExpiration} días</span>
+                    </StatusPill>
+                  </div>
+                  <div>
+                    <div className="flex items-baseline justify-between text-sm">
+                      <span><strong className="font-display text-2xl">{owned.remainingHours}</strong> <span className="text-muted-foreground">de {owned.initialHours} horas disponibles</span></span>
+                      <span className="text-xs text-muted-foreground">{used} usadas</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Horas restantes">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-      {myPackages.length > 0 && (
-        <ul className="mt-4 flex flex-col gap-3">
-          {myPackages.map((userPackage) => (
-            <li
-              key={userPackage.id}
-              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
-            >
-              <div>
-                <p className="font-semibold text-foreground">
-                  {userPackage.packageName}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {userPackage.remainingHours} de {userPackage.initialHours}{" "}
-                  horas disponibles
-                </p>
-              </div>
-              <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground">
-                Vence en {userPackage.daysUntilExpiration} días
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <section className="flex flex-col gap-4" aria-labelledby="disponibles">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="disponibles" className="font-display text-xl font-bold">Paquetes disponibles</h2>
+          <FilterTabs items={SORTS.map((s) => ({ label: s.label, href: s.value === "precio" ? "/paquetes" : `/paquetes?sort=${s.value}`, active: sort === s.value }))} />
+        </div>
 
-      <h2 className="mt-10 font-display text-xl font-bold text-foreground">
-        Paquetes disponibles
-      </h2>
+        {packagesError && <Notice tone="error">{packagesError}</Notice>}
+        {!packagesError && packages.length === 0 ? (
+          <EmptyState icon={PackageOpen} title="No hay paquetes disponibles" description="Vuelve a intentarlo más tarde." />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {view.items.map((pkg) => (
+              <article key={pkg.id} className={`${cardClass} relative flex flex-col p-5 transition hover:shadow-md ${pkg.pricePerHour === bestValue ? "border-primary ring-1 ring-primary/40" : ""}`}>
+                {pkg.pricePerHour === bestValue && (
+                  <span className="absolute -top-2.5 right-4 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase text-primary-foreground shadow-sm"><Sparkles size={10} />Mejor valor</span>
+                )}
+                <StatusPill tone="success"><span className="inline-flex items-center gap-1"><Tag size={11} />{Math.round(pkg.discountPercentage * 100)}% dscto.</span></StatusPill>
+                <h3 className="mt-3 text-lg font-bold">{pkg.name}</h3>
+                <p className="text-sm text-muted-foreground">{pkg.hoursQuantity} horas · válido {pkg.validityDays} días</p>
+                <p className="mt-4 font-display text-3xl font-bold">{soles(pkg.price)}</p>
+                <p className="text-sm text-muted-foreground">{soles(pkg.pricePerHour)} por hora{pkg.savings > 0 ? ` · ahorras ${soles(pkg.savings)}` : ""}</p>
+                <form action={purchasePackage} className="mt-5">
+                  <input type="hidden" name="packageId" value={pkg.id} />
+                  <ConfirmButton message="Se realizará la compra de este paquete de horas." confirmLabel="Sí, comprar" className={`${primaryButton} w-full`}>Comprar paquete</ConfirmButton>
+                </form>
+              </article>
+            ))}
+          </div>
+        )}
 
-      {packagesError && (
-        <p className="mt-6 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {packagesError}
-        </p>
-      )}
-
-      {!packagesError && packages.length === 0 && (
-        <p className="mt-4 text-sm text-muted-foreground">
-          No hay paquetes disponibles por el momento.
-        </p>
-      )}
-
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {packages.map((pkg) => (
-          <article
-            key={pkg.id}
-            className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm"
-          >
-            <span className="inline-block w-fit rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground">
-              {Math.round(pkg.discountPercentage * 100)}% de descuento
-            </span>
-            <h3 className="mt-3 text-base font-semibold text-foreground">
-              {pkg.name}
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {pkg.hoursQuantity} horas · válido {pkg.validityDays} días
-            </p>
-            <p className="mt-3 text-lg font-bold text-foreground">
-              S/ {pkg.price}
-              <span className="text-sm font-normal text-muted-foreground">
-                {" "}
-                · S/ {pkg.pricePerHour}/hora
-              </span>
-            </p>
-            <form action={purchasePackage} className="mt-4">
-              <input type="hidden" name="packageId" value={pkg.id} />
-              <button
-                type="submit"
-                className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                Comprar
-              </button>
-            </form>
-          </article>
-        ))}
-      </div>
+        {!packagesError && <Pagination basePath="/paquetes" page={view.page} totalPages={view.totalPages} totalElements={view.totalElements} params={{ sort: sort === "precio" ? undefined : sort }} />}
+      </section>
     </div>
   );
 }

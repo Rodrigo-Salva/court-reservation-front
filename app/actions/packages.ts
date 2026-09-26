@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { getSession } from "@/lib/session";
 
 export async function purchasePackage(formData: FormData) {
@@ -20,10 +20,11 @@ export async function purchasePackage(formData: FormData) {
       token: session.token,
       body: { userId: session.userId, packageId },
     });
-  } catch {
-    // Si la compra falla (p.ej. paquete desactivado) el usuario simplemente
-    // no vera un paquete nuevo en su lista al revalidar.
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : "No se pudo completar la compra.";
+    redirect(`/paquetes?error=${encodeURIComponent(message)}`);
   }
 
   revalidatePath("/paquetes");
+  redirect("/paquetes?success=1");
 }

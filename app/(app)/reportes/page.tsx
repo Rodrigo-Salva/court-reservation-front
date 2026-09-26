@@ -1,3 +1,4 @@
+import { inputClass, primaryButton } from "@/components/ui";
 import { redirect } from "next/navigation";
 import { Download, TrendingUp, Users, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
@@ -16,7 +17,7 @@ function dateOffset(days: number) {
 }
 
 const money = (value: number) => `S/ ${Number(value).toFixed(2)}`;
-const selectClass = "mt-1 block rounded-lg border border-border bg-background px-3 py-2 text-sm";
+const selectClass = inputClass;
 
 export default async function ReportesPage({ searchParams }: { searchParams: Promise<Params> }) {
   const session = await getSession();
@@ -68,30 +69,30 @@ export default async function ReportesPage({ searchParams }: { searchParams: Pro
         )}
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-4">
-        <label className="text-sm font-medium">Desde<input type="date" name="from" defaultValue={startDate} className={selectClass} /></label>
-        <label className="text-sm font-medium">Hasta<input type="date" name="to" defaultValue={endDate} className={selectClass} /></label>
+      <form className="flex flex-wrap items-end gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <label className="flex min-w-36 flex-col gap-1.5 text-sm font-semibold">Desde<input type="date" name="from" defaultValue={startDate} className={selectClass} /></label>
+        <label className="flex min-w-36 flex-col gap-1.5 text-sm font-semibold">Hasta<input type="date" name="to" defaultValue={endDate} className={selectClass} /></label>
         {isGlobalAdmin && (
-          <label className="text-sm font-medium">Sede
+          <label className="flex min-w-36 flex-col gap-1.5 text-sm font-semibold">Sede
             <select name="venueId" defaultValue={params.venueId ?? ""} className={selectClass}>
               <option value="">Todas</option>
               {venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.name}</option>)}
             </select>
           </label>
         )}
-        <label className="text-sm font-medium">Cancha
+        <label className="flex min-w-36 flex-col gap-1.5 text-sm font-semibold">Cancha
           <select name="courtId" defaultValue={params.courtId ?? ""} className={selectClass}>
             <option value="">Todas</option>
             {courts.map((court) => <option key={court.id} value={court.id}>{court.name}{court.venueName ? ` · ${court.venueName}` : ""}</option>)}
           </select>
         </label>
-        <label className="text-sm font-medium">Deporte
+        <label className="flex min-w-36 flex-col gap-1.5 text-sm font-semibold">Deporte
           <select name="sportType" defaultValue={params.sportType ?? ""} className={selectClass}>
             <option value="">Todos</option>
             {SPORT_TYPES.map((sport) => <option key={sport.value} value={sport.value}>{sport.label}</option>)}
           </select>
         </label>
-        <button className="rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground">Aplicar</button>
+        <button className={primaryButton}>Aplicar filtros</button>
       </form>
 
       {error && <p className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}

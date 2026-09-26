@@ -1,215 +1,137 @@
 import Link from "next/link";
+import { CalendarPlus, CalendarX, Clock, Hash } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getSession } from "@/lib/session";
-import { type BookingResponseDTO } from "@/lib/definitions";
+import { BOOKING_STATUS_LABELS, SPORT_TYPES, type BookingResponseDTO, type UserResponseDTO } from "@/lib/definitions";
+import { dateBlock, hhmm, money, nowMs, startsAt } from "@/lib/format";
 import { CancelBookingAction } from "@/components/CancelBookingAction";
 import { CheckInQr } from "@/components/CheckInQr";
 import { RescheduleBookingAction } from "@/components/RescheduleBookingAction";
 import { CourtReviewAction } from "@/components/CourtReviewAction";
+import { Pagination, paginate } from "@/components/Pagination";
+import { EmptyState, FilterTabs, Notice, PageHeader, StatusPill, cardClass, primaryButton, type PillTone } from "@/components/ui";
 
-const CANCELLABLE_STATUSES = new Set(["PENDIENTE", "CONFIRMADA"]);
+const PAGE_SIZE = 5;
+const CANCELLABLE = new Set(["PENDIENTE", "CONFIRMADA"]);
+const UPCOMING = new Set(["PENDIENTE", "CONFIRMADA"]);
+const STATUS_TONE: Record<string, PillTone> = { CONFIRMADA: "success", PENDIENTE: "warning", CANCELADA: "danger", NO_SHOW: "danger", COMPLETADA: "info" };
+const TABS = [
+  { label: "Próximas", value: "proximas" },
+  { label: "Pasadas", value: "pasadas" },
+  { label: "Todas", value: "todas" },
+] as const;
 
-function formatDateBlock(dateString: string) {
-  try {
-    const [y, m, d] = dateString.split('-').map(Number);
-    const date = new Date(y, m - 1, d);
-    
-    const formatterDayName = new Intl.DateTimeFormat('es-ES', { weekday: 'short' });
-    const formatterMonth = new Intl.DateTimeFormat('es-ES', { month: 'short' });
-    
-    const dayName = formatterDayName.format(date).toUpperCase().replace('.', '');
-    const monthName = formatterMonth.format(date).toUpperCase().replace('.', '');
-    
-    return { dayName, dayNumber: d.toString(), monthName };
-  } catch {
-    return { dayName: "DAY", dayNumber: "00", monthName: "MON" };
-  }
+const normalize = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+/** El backend no envía el deporte en la reserva; se infiere del nombre de la cancha. */
+function sportOf(courtName: string) {
+  const name = normalize(courtName);
+  return SPORT_TYPES.find((sport) => name.includes(normalize(sport.label)) || name.includes(sport.value.toLowerCase()))?.label ?? "Deporte";
 }
 
-// Inferred sport based on court name
-function inferSport(courtName: string) {
-  const lower = courtName.toLowerCase();
-  if (lower.includes("pádel") || lower.includes("padel")) return "Pádel";
-  if (lower.includes("fútbol") || lower.includes("futbol")) return "Fútbol";
-  if (lower.includes("tenis")) return "Tenis";
-  if (lower.includes("básquet") || lower.includes("basquet")) return "Básquet";
-  if (lower.includes("vóley") || lower.includes("voley")) return "Vóley";
-  return "Deporte";
-}
-
-export default async function ReservasPage() {
+export default async function ReservasPage({ searchParams }: { searchParams: Promise<{ tab?: string; page?: string }> }) {
   const session = await getSession();
+  const { tab: rawTab, page } = await searchParams;
+  const tab = TABS.some((t) => t.value === rawTab) ? (rawTab as (typeof TABS)[number]["value"]) : "proximas";
+
   let bookings: BookingResponseDTO[] = [];
   let error: string | null = null;
-
   try {
-    bookings = await apiFetch<BookingResponseDTO[]>(
-      `/api/bookings/user/${session!.userId}`,
-      { token: session!.token }
-    );
-    bookings.sort((a, b) =>
-      `${a.bookingDate}${a.startTime}`.localeCompare(
-        `${b.bookingDate}${b.startTime}`
-      )
-    );
+    bookings = await apiFetch<BookingResponseDTO[]>(`/api/bookings/user/${session!.userId}`, { token: session!.token });
   } catch (err) {
-    error =
-      err instanceof ApiError
-        ? err.message
-        : "No se pudieron cargar tus reservas.";
+    error = err instanceof ApiError ? err.message : "No se pudieron cargar tus reservas.";
   }
 
+  let isVip = false;
+  try {
+    isVip = (await apiFetch<UserResponseDTO>(`/api/users/${session!.userId}`, { token: session!.token })).membershipType === "VIP";
+  } catch { /* Sin el dato, el diálogo muestra la política general. */ }
+
+  const now = nowMs();
+  const isUpcoming = (b: BookingResponseDTO) => UPCOMING.has(b.status) && startsAt(b.bookingDate, b.endTime) >= now;
+  const upcoming = bookings.filter(isUpcoming).sort((a, b) => startsAt(a.bookingDate, a.startTime) - startsAt(b.bookingDate, b.startTime));
+  const past = bookings.filter((b) => !isUpcoming(b)).sort((a, b) => startsAt(b.bookingDate, b.startTime) - startsAt(a.bookingDate, a.startTime));
+  const all = [...bookings].sort((a, b) => startsAt(b.bookingDate, b.startTime) - startsAt(a.bookingDate, a.startTime));
+  const source = tab === "proximas" ? upcoming : tab === "pasadas" ? past : all;
+  const view = paginate(source, page, PAGE_SIZE);
+
+  // El QR solo se pide para las reservas confirmadas que se muestran en la página actual.
   const checkInCodes = new Map<number, string>();
-  if (!error) {
-    await Promise.all(bookings.filter((booking) => booking.status === "CONFIRMADA").map(async (booking) => {
-      try {
-        const response = await apiFetch<{ code: string }>(`/api/bookings/${booking.id}/check-in-code`, { token: session!.token });
-        checkInCodes.set(booking.id, response.code);
-      } catch { /* El QR es opcional; una falla no oculta la reserva. */ }
-    }));
-  }
+  await Promise.all(view.items.filter((b) => b.status === "CONFIRMADA").map(async (b) => {
+    try {
+      const response = await apiFetch<{ code: string }>(`/api/bookings/${b.id}/check-in-code`, { token: session!.token });
+      checkInCodes.set(b.id, response.code);
+    } catch { /* El QR es opcional; una falla no oculta la reserva. */ }
+  }));
+
+  const counts = { proximas: upcoming.length, pasadas: past.length, todas: bookings.length };
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Header section */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Tu actividad</p>
-          <h1 className="font-display text-4xl sm:text-4xl font-bold text-foreground">
-            Mis reservas
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Gestiona tus próximos partidos y revisa tu historial.
-          </p>
-        </div>
-        <Link
-          href="/reservas/nueva"
-          className="rounded-full bg-[#22c55e] px-4 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 flex items-center gap-1"
-        >
-          + Nueva reserva
-        </Link>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        eyebrow="Tu actividad"
+        title="Mis reservas"
+        description="Gestiona tus próximos partidos y revisa tu historial."
+        actions={<Link href="/reservas/nueva" className={primaryButton}><CalendarPlus size={16} />Nueva reserva</Link>}
+      />
 
-      {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-border/50 pb-px">
-        <button className="px-4 py-2 bg-card rounded-t-xl border border-border/50 border-b-0 font-bold text-sm text-foreground shadow-[0_-2px_10px_rgba(0,0,0,0.02)] relative z-10 -mb-px">
-          Próximas
-        </button>
-        <button className="px-4 py-2 font-semibold text-sm text-muted-foreground hover:text-foreground">
-          Pasadas
-        </button>
-        <button className="px-4 py-2 font-semibold text-sm text-muted-foreground hover:text-foreground">
-          Todas
-        </button>
-      </div>
+      {error && <Notice tone="error">{error}</Notice>}
 
-      {error && (
-        <p className="mt-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FilterTabs items={TABS.map((t) => ({ label: t.label, href: t.value === "proximas" ? "/reservas" : `/reservas?tab=${t.value}`, active: tab === t.value, count: counts[t.value] }))} />
 
-      {!error && bookings.length === 0 && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Todavía no tienes reservas.{" "}
-          <Link href="/reservas/nueva" className="text-[#22c55e] font-bold hover:underline">
-            Reserva tu primera cancha
-          </Link>
-          .
-        </p>
-      )}
-
-      <ul className="flex flex-col gap-4">
-        {bookings.map((booking) => {
-          const dateBlock = formatDateBlock(booking.bookingDate);
-          return (
-            <li
-              key={booking.id}
-              className="flex items-center gap-6 rounded-2xl border border-border bg-card p-4 shadow-sm"
-            >
-              {/* Date Box */}
-              <div className="flex flex-col items-center justify-center w-16 h-16 rounded-xl bg-secondary border border-border shrink-0">
-                <span className="text-[9px] font-bold text-muted-foreground uppercase">{dateBlock.dayName}</span>
-                <span className="text-xl font-bold text-foreground leading-none my-0.5">{dateBlock.dayNumber}</span>
-                <span className="text-[9px] font-bold text-muted-foreground uppercase">{dateBlock.monthName}</span>
-              </div>
-
-              {/* Center Info */}
-              <div className="flex-1 min-w-0 flex flex-col gap-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <StatusBadge status={booking.status} id={booking.id} />
+      {!error && view.items.length === 0 ? (
+        <EmptyState
+          icon={CalendarX}
+          title={bookings.length === 0 ? "Todavía no tienes reservas" : "No hay reservas en esta pestaña"}
+          description={bookings.length === 0 ? "Reserva tu primera cancha y aparecerá aquí." : "Prueba con otra pestaña."}
+        />
+      ) : (
+        <ul className="flex flex-col gap-4">
+          {view.items.map((booking) => {
+            const block = dateBlock(booking.bookingDate);
+            return (
+              <li key={booking.id} className={`${cardClass} flex flex-wrap items-center gap-x-5 gap-y-4 p-4 transition hover:shadow-md sm:p-5`}>
+                <div className="flex size-18 shrink-0 flex-col items-center justify-center rounded-2xl bg-secondary">
+                  <span className="text-[10px] font-bold text-muted-foreground">{block.weekday}</span>
+                  <span className="font-display text-2xl font-bold leading-none">{block.day}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">{block.month}</span>
                 </div>
-                
-                <h3 className="font-bold text-lg text-foreground truncate">
-                  {booking.courtName}
-                </h3>
-                
-                <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <span className="opacity-60">〽</span>
-                  {inferSport(booking.courtName)} {booking.startTime.slice(0, 5)} - {booking.endTime.slice(0, 5)}
-                </p>
-              </div>
 
-              {/* Right Side */}
-              <div className="flex flex-col items-end shrink-0 gap-3">
-                <div className="text-right">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase mb-0.5">Total</p>
-                  <p className="text-lg font-bold text-foreground leading-none">
-                    S/ {booking.totalPrice.toFixed(2)}
+                <div className="min-w-0 flex-1 basis-56">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusPill tone={STATUS_TONE[booking.status] ?? "neutral"}>{BOOKING_STATUS_LABELS[booking.status] ?? booking.status}</StatusPill>
+                    <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-muted-foreground"><Hash size={11} />RES-{String(booking.id).padStart(4, "0")}</span>
+                  </div>
+                  <h2 className="mt-1.5 truncate text-lg font-bold">{booking.courtName}</h2>
+                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Clock size={13} />{sportOf(booking.courtName)} · {hhmm(booking.startTime)} – {hhmm(booking.endTime)}
                   </p>
                 </div>
-                
-                {CANCELLABLE_STATUSES.has(booking.status) && (
-                  <CancelBookingAction 
-                    bookingId={booking.id} 
-                    totalPrice={booking.totalPrice} 
-                    isRecurrent={booking.isRecurrent || false} 
-                  />
-                )}
-                {booking.status === "PENDIENTE" && (
-                  <div className="flex flex-col items-end gap-1">
-                    {booking.paymentDeadline && <p className="text-[10px] font-semibold text-amber-600">Paga antes de las {booking.paymentDeadline.slice(11, 16)}</p>}
-                    <Link href="/pagos" className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">Pagar ahora</Link>
+
+                <div className="ml-auto flex flex-col items-end gap-3">
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase text-muted-foreground">Total</p>
+                    <p className="font-display text-xl font-bold leading-none">{money(booking.totalPrice)}</p>
                   </div>
-                )}
-                {booking.status === "CONFIRMADA" && <RescheduleBookingAction bookingId={booking.id} date={booking.bookingDate} startTime={booking.startTime} endTime={booking.endTime} />}
-                {booking.status === "COMPLETADA" && <CourtReviewAction courtId={booking.courtId} courtName={booking.courtName} />}
-                {booking.status === "CONFIRMADA" && <CheckInQr bookingId={booking.id} code={checkInCodes.get(booking.id)} />}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {booking.status === "PENDIENTE" && (
+                      <>
+                        {booking.paymentDeadline && <span className="text-[11px] font-semibold text-amber-600">Paga antes de las {booking.paymentDeadline.slice(11, 16)}</span>}
+                        <Link href="/pagos" className={primaryButton}>Pagar ahora</Link>
+                      </>
+                    )}
+                    {booking.status === "CONFIRMADA" && <RescheduleBookingAction bookingId={booking.id} date={booking.bookingDate} startTime={booking.startTime} endTime={booking.endTime} />}
+                    {booking.status === "CONFIRMADA" && <CheckInQr bookingId={booking.id} code={checkInCodes.get(booking.id)} />}
+                    {booking.status === "COMPLETADA" && <CourtReviewAction courtId={booking.courtId} courtName={booking.courtName} />}
+                    {CANCELLABLE.has(booking.status) && <CancelBookingAction bookingId={booking.id} totalPrice={booking.totalPrice} isRecurrent={booking.isRecurrent || false} bookingDate={booking.bookingDate} startTime={booking.startTime} unpaid={booking.status === "PENDIENTE"} isVip={isVip} />}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-function StatusBadge({ status, id }: { status: string, id: number }) {
-  let bgColor = "bg-[#22c55e]";
-  let textColor = "text-[#22c55e]";
-  let label = "CONFIRMADA";
-
-  if (status === "PENDIENTE") {
-    bgColor = "bg-[#f59e0b]";
-    textColor = "text-[#f59e0b]";
-    label = "PENDIENTE";
-  } else if (status === "CANCELADA" || status === "NO_SHOW") {
-    bgColor = "bg-[#ef4444]";
-    textColor = "text-[#ef4444]";
-    label = status;
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`flex items-center gap-1 rounded-full ${bgColor}/10 px-2 py-0.5`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${bgColor}`}></span>
-        <span className={`text-[9px] font-bold ${textColor} uppercase tracking-wider`}>
-          {label}
-        </span>
-      </div>
-      <span className="text-[9px] font-bold text-muted-foreground uppercase">
-        RES-{id.toString().padStart(4, '0')}
-      </span>
+      {!error && <Pagination basePath="/reservas" page={view.page} totalPages={view.totalPages} totalElements={view.totalElements} params={{ tab: tab === "proximas" ? undefined : tab }} />}
     </div>
   );
 }

@@ -1,28 +1,121 @@
-import { ReceiptText } from "lucide-react";
+import { ConfirmButton } from "@/components/forms";
+import Link from "next/link";
+import { Banknote, CheckCircle2, CreditCard, ReceiptText, Smartphone, Wallet } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { simulatePayment } from "@/app/actions/payments";
+import { Pagination, paginate } from "@/components/Pagination";
+import { EmptyState, PageHeader, StatCard, StatusPill, cardClass, inputClass, primaryButton, type PillTone } from "@/components/ui";
+import { hhmm, money, shortDate } from "@/lib/format";
 import type { BookingResponseDTO, PaymentResponseDTO } from "@/lib/definitions";
 
-const STATUS_STYLE: Record<PaymentResponseDTO["status"], string> = { APROBADO: "bg-emerald-100 text-emerald-700", RECHAZADO: "bg-red-100 text-red-700", REEMBOLSADO: "bg-amber-100 text-amber-700" };
+const PAGE_SIZE = 6;
+const STATUS_TONE: Record<PaymentResponseDTO["status"], PillTone> = { APROBADO: "success", RECHAZADO: "danger", REEMBOLSADO: "warning" };
+const METHOD: Record<PaymentResponseDTO["method"], { label: string; icon: typeof CreditCard }> = {
+  TARJETA: { label: "Tarjeta", icon: CreditCard },
+  YAPE_PLIN: { label: "Yape / Plin", icon: Smartphone },
+  EFECTIVO: { label: "Efectivo", icon: Banknote },
+};
 
-export default async function PagosPage() {
+export default async function PagosPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const session = await getSession();
   if (!session) return null;
+  const { page } = await searchParams;
+
   const [paymentsResult, bookingsResult] = await Promise.allSettled([
     apiFetch<PaymentResponseDTO[]>("/api/payments/my", { token: session.token }),
     apiFetch<BookingResponseDTO[]>(`/api/bookings/user/${session.userId}`, { token: session.token }),
   ]);
   const payments = paymentsResult.status === "fulfilled" ? paymentsResult.value : [];
   const bookings = bookingsResult.status === "fulfilled" ? bookingsResult.value : [];
+
   const paymentByBooking = new Map(payments.map((payment) => [payment.bookingId, payment]));
-  const payable = bookings.filter((booking) => booking.status !== "CANCELADA" && paymentByBooking.get(booking.id)?.status !== "APROBADO" && paymentByBooking.get(booking.id)?.status !== "REEMBOLSADO");
+  const payable = bookings.filter((booking) => {
+    const status = paymentByBooking.get(booking.id)?.status;
+    return booking.status !== "CANCELADA" && status !== "APROBADO" && status !== "REEMBOLSADO";
+  });
+  const paidTotal = payments.filter((p) => p.status === "APROBADO").reduce((sum, p) => sum + Number(p.amount), 0);
+  const pendingTotal = payable.reduce((sum, b) => sum + Number(b.totalPrice), 0);
+  const history = paginate(payments, page, PAGE_SIZE);
 
-  return <div className="flex flex-col gap-8">
-    <div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Demo de pagos</p><h1 className="mt-1 font-display text-3xl font-bold">Pagos y comprobantes</h1><p className="mt-2 text-sm text-muted-foreground">No se realiza ningún cobro real. Usa una tarjeta terminada en 0000 para simular un rechazo.</p></div>
-    <section><h2 className="mb-4 font-display text-xl font-bold">Reservas por pagar</h2>{payable.length === 0 ? <Empty text="No tienes reservas pendientes de pago." /> : <div className="grid gap-4 lg:grid-cols-2">{payable.map((booking) => <article key={booking.id} className="rounded-2xl border border-border bg-card p-5"><div className="flex justify-between gap-4"><div><h3 className="font-bold">{booking.courtName}</h3><p className="mt-1 text-sm text-muted-foreground">{booking.bookingDate} · {booking.startTime.slice(0,5)}–{booking.endTime.slice(0,5)}</p></div><strong>S/ {Number(booking.totalPrice).toFixed(2)}</strong></div>{paymentByBooking.get(booking.id)?.status === "RECHAZADO" && <p className="mt-3 rounded-lg bg-red-50 p-2 text-xs text-red-700">{paymentByBooking.get(booking.id)?.rejectionReason}</p>}<form action={simulatePayment} className="mt-4 grid gap-3 sm:grid-cols-3"><input type="hidden" name="bookingId" value={booking.id}/><select name="method" defaultValue="TARJETA" className="rounded-lg border border-border bg-background px-3 py-2 text-sm"><option value="TARJETA">Tarjeta</option><option value="YAPE_PLIN">Yape / Plin</option><option value="EFECTIVO">Efectivo</option></select><input name="simulatedCardNumber" placeholder="Tarjeta demo (opcional)" className="rounded-lg border border-border bg-background px-3 py-2 text-sm"/><button className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">Simular pago</button></form></article>)}</div>}</section>
-    <section><h2 className="mb-4 font-display text-xl font-bold">Historial</h2>{payments.length === 0 ? <Empty text="Aún no tienes comprobantes." /> : <div className="overflow-hidden rounded-2xl border border-border bg-card">{payments.map((payment) => <article key={payment.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 last:border-0"><div className="flex items-center gap-3"><div className="rounded-full bg-secondary p-2"><ReceiptText size={18}/></div><div><p className="font-semibold">{payment.courtName}</p><p className="text-xs text-muted-foreground">Operación {payment.operationCode} · {payment.method.replace("_", " / ")}</p></div></div><div className="flex items-center gap-3"><strong>S/ {Number(payment.amount).toFixed(2)}</strong><span className={`rounded-full px-2 py-1 text-xs font-bold ${STATUS_STYLE[payment.status]}`}>{payment.status}</span></div></article>)}</div>}</section>
-  </div>;
+  return (
+    <div className="flex flex-col gap-8">
+      <PageHeader eyebrow="Demo de pagos" title="Pagos y comprobantes" description="No se realiza ningún cobro real. Usa una tarjeta terminada en 0000 para simular un rechazo." />
+
+      <section className="grid gap-4 sm:grid-cols-3" aria-label="Resumen">
+        <StatCard icon={CheckCircle2} tone="green" label="Pagado" value={money(paidTotal)} hint={`${payments.filter((p) => p.status === "APROBADO").length} pago(s) aprobado(s)`} />
+        <StatCard icon={Wallet} tone="amber" label="Por pagar" value={money(pendingTotal)} hint={`${payable.length} reserva(s) pendiente(s)`} />
+        <StatCard icon={ReceiptText} tone="slate" label="Comprobantes" value={String(payments.length)} hint="en tu historial" />
+      </section>
+
+      <section className="flex flex-col gap-4" aria-labelledby="por-pagar">
+        <h2 id="por-pagar" className="font-display text-xl font-bold">Reservas por pagar</h2>
+        {payable.length === 0 ? (
+          <EmptyState icon={CheckCircle2} title="Estás al día" description="No tienes reservas pendientes de pago." />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {payable.map((booking) => {
+              const previous = paymentByBooking.get(booking.id);
+              return (
+                <article key={booking.id} className={`${cardClass} flex flex-col gap-4 p-5`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-bold">{booking.courtName}</h3>
+                      <p className="text-sm text-muted-foreground">{shortDate(booking.bookingDate)} · {hhmm(booking.startTime)}–{hhmm(booking.endTime)}</p>
+                    </div>
+                    <strong className="font-display text-xl">{money(booking.totalPrice)}</strong>
+                  </div>
+                  {previous?.status === "RECHAZADO" && <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">{previous.rejectionReason}</p>}
+                  <form action={simulatePayment} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input type="hidden" name="bookingId" value={booking.id} />
+                    <select name="method" defaultValue="TARJETA" aria-label="Método de pago" className={inputClass}>
+                      <option value="TARJETA">Tarjeta</option>
+                      <option value="YAPE_PLIN">Yape / Plin</option>
+                      <option value="EFECTIVO">Efectivo</option>
+                    </select>
+                    <input name="simulatedCardNumber" placeholder="Tarjeta demo (opcional)" aria-label="Número de tarjeta de prueba" className={inputClass} />
+                    <ConfirmButton message="Se registrará el pago de esta reserva." confirmLabel="Sí, pagar" className={primaryButton}>Pagar</ConfirmButton>
+                  </form>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-4" aria-labelledby="historial">
+        <h2 id="historial" className="font-display text-xl font-bold">Historial</h2>
+        {payments.length === 0 ? (
+          <EmptyState icon={ReceiptText} title="Aún no tienes comprobantes" description="Tus pagos aparecerán aquí." />
+        ) : (
+          <div className={`${cardClass} overflow-hidden`}>
+            <ul className="divide-y divide-border">
+              {history.items.map((payment) => {
+                const method = METHOD[payment.method];
+                const MethodIcon = method.icon;
+                return (
+                  <li key={payment.id} className="flex flex-wrap items-center gap-4 px-5 py-4">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-muted-foreground"><ReceiptText size={18} /></span>
+                    <div className="min-w-0 flex-1 basis-48">
+                      <p className="truncate font-semibold">{payment.courtName}</p>
+                      <p className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                        <span className="font-mono">{payment.operationCode}</span>
+                        <span className="inline-flex items-center gap-1"><MethodIcon size={12} />{method.label}</span>
+                      </p>
+                    </div>
+                    <strong className="tabular-nums">{money(payment.amount)}</strong>
+                    <StatusPill tone={STATUS_TONE[payment.status]}>{payment.status}</StatusPill>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="border-t border-border p-4">
+              <Pagination basePath="/pagos" page={history.page} totalPages={history.totalPages} totalElements={history.totalElements} />
+            </div>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">¿Necesitas reservar? <Link href="/reservas/nueva" className="font-semibold text-primary hover:underline">Crea una nueva reserva</Link>.</p>
+      </section>
+    </div>
+  );
 }
-
-function Empty({ text }: { text: string }) { return <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">{text}</p>; }

@@ -1,3 +1,5 @@
+import { ConfirmButton } from "@/components/forms";
+import { inputClass } from "@/components/ui";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Trophy } from "lucide-react";
@@ -92,10 +94,10 @@ export default async function TorneoDetallePage({
                         <form action={registerMatchResult} className="mt-3 flex items-center gap-2">
                           <input type="hidden" name="tournamentId" value={tournament.id} />
                           <input type="hidden" name="matchId" value={match.id} />
-                          <input required name="scoreOne" type="number" min="0" aria-label={`Puntos de ${match.playerOne}`} className="w-16 rounded-lg border border-border bg-background px-2 py-1.5 text-sm" />
+                          <input required name="scoreOne" type="number" min="0" aria-label={`Puntos de ${match.playerOne}`} className={`${inputClass} w-16 px-2! py-1.5! text-center`} />
                           <span className="text-muted-foreground">-</span>
-                          <input required name="scoreTwo" type="number" min="0" aria-label={`Puntos de ${match.playerTwo}`} className="w-16 rounded-lg border border-border bg-background px-2 py-1.5 text-sm" />
-                          <button className="ml-auto rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">Registrar</button>
+                          <input required name="scoreTwo" type="number" min="0" aria-label={`Puntos de ${match.playerTwo}`} className={`${inputClass} w-16 px-2! py-1.5! text-center`} />
+                          <ConfirmButton message="Se registrará el resultado del partido. Revisa el marcador antes de confirmar." confirmLabel="Sí, registrar" pendingText="Guardando…" className="ml-auto inline-flex items-center rounded-xl bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">Registrar</ConfirmButton>
                         </form>
                       )}
                     </article>
